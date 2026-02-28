@@ -13,76 +13,82 @@ export default function ScriptViewer({ jobId }) {
   if (!script) return null;
 
   return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-900/60 overflow-hidden">
+    <div className="w-full border border-white/10 rounded bg-black overflow-hidden script-panel animate-fade-in">
+
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-800/50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/3 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xl">📜</span>
-          <div className="text-left">
-            <div className="font-semibold text-gray-100">
-              AI-Generated Script
-            </div>
-            <div className="text-sm text-gray-400">
-              "{script.title}" · {script.shots?.length || 0} shots · {script.overall_mood}
-            </div>
-          </div>
+          <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Script</span>
+          <span className="text-[11px] font-mono text-white/60">
+            "{script.title}"
+          </span>
+          <span className="text-[9px] font-mono text-white/25">
+            {script.shots?.length || 0} shots · {script.overall_mood}
+          </span>
         </div>
-        <svg
-          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-        </svg>
+        <span className={`text-[10px] font-mono text-white/30 transition-transform duration-200 ${expanded ? "rotate-180 inline-block" : ""}`}>
+          ▾
+        </span>
       </button>
 
-      {/* Script details */}
+      {/* Body */}
       {expanded && (
-        <div className="px-6 pb-6 space-y-4 border-t border-gray-800">
-          {/* Music direction */}
+        <div className="border-t border-white/8 px-4 py-4 space-y-4">
+
+          {/* Music */}
           {script.music_direction && (
-            <div className="mt-4 p-3 rounded-lg bg-gray-800/60 text-sm">
-              <span className="text-gray-400">🎵 Music: </span>
-              <span className="text-gray-200">{script.music_direction}</span>
+            <div className="flex gap-3">
+              <span className="text-white/25 flex-shrink-0">♩</span>
+              <span className="text-[11px] text-white/40 italic">{script.music_direction}</span>
             </div>
           )}
 
           {/* Shot list */}
-          <div className="space-y-3 mt-4">
+          <div className="space-y-px">
             {script.shots?.map((shot, i) => (
               <div
                 key={i}
-                className={`
-                  p-4 rounded-xl border text-sm
-                  ${shot.shot_type === "photo"
-                    ? "border-blue-500/30 bg-blue-500/5"
-                    : "border-purple-500/30 bg-purple-500/5"
-                  }
-                `}
+                className="grid grid-cols-[32px_60px_1fr] gap-3 py-2.5 border-b border-white/5 last:border-0"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`
-                    px-2 py-0.5 rounded-full text-xs font-medium
-                    ${shot.shot_type === "photo"
-                      ? "bg-blue-500/20 text-blue-300"
-                      : "bg-purple-500/20 text-purple-300"
-                    }
-                  `}>
-                    {shot.shot_type === "photo" ? `📷 Photo #${shot.source_photo_id}` : "🎥 AI Generated"}
-                  </span>
-                  <span className="text-gray-500">{shot.duration_seconds}s</span>
-                  <span className="text-gray-600">→ {shot.transition_to_next}</span>
-                </div>
+                {/* Shot number */}
+                <span className="text-[9px] text-white/25 tabular-nums pt-0.5">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
 
-                <div className="text-gray-300">
-                  {shot.veo_prompt || shot.camera_direction}
-                </div>
+                {/* Type badge */}
+                <span className={`
+                  text-[8px] tracking-widest uppercase self-start mt-0.5 px-1.5 py-0.5 rounded-sm border
+                  ${shot.shot_type === "photo"
+                    ? "border-white/20 text-white/50"
+                    : "border-white/10 text-white/25"
+                  }
+                `}>
+                  {shot.shot_type === "photo" ? `PHOTO` : `AI`}
+                </span>
 
-                {shot.narration && (
-                  <div className="mt-2 text-gray-400 italic">"{shot.narration}"</div>
-                )}
+                {/* Details */}
+                <div className="space-y-0.5 min-w-0">
+                  <div className="text-[11px] text-white/60 leading-relaxed">
+                    {shot.veo_prompt || shot.camera_direction}
+                  </div>
+                  <div className="flex items-center gap-3 text-[9px] text-white/25">
+                    <span>{shot.duration_seconds}s</span>
+                    {shot.transition_to_next && (
+                      <span>→ {shot.transition_to_next}</span>
+                    )}
+                    {shot.shot_type === "photo" && shot.source_photo_id && (
+                      <span>frame #{shot.source_photo_id}</span>
+                    )}
+                  </div>
+                  {shot.narration && (
+                    <div className="text-[10px] text-white/30 italic pt-0.5">
+                      "{shot.narration}"
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

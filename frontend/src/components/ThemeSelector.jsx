@@ -1,41 +1,37 @@
 import React from "react";
 
 const THEMES = [
-  { id: "auto",        label: "✨ Auto",        desc: "AI picks the best style" },
-  { id: "cinematic",   label: "🎬 Cinematic",   desc: "Hollywood blockbuster feel" },
-  { id: "romantic",    label: "💕 Romantic",     desc: "Warm, dreamy, soft focus" },
-  { id: "adventure",   label: "🏔️ Adventure",   desc: "Epic, sweeping, dynamic" },
-  { id: "horror",      label: "🌑 Horror",      desc: "Dark, suspenseful, eerie" },
-  { id: "documentary", label: "📹 Documentary", desc: "Observational, authentic" },
+  { id: "auto",        label: "AUTO" },
+  { id: "cinematic",   label: "CINEMATIC" },
+  { id: "romantic",    label: "ROMANTIC" },
+  { id: "adventure",   label: "ADVENTURE" },
+  { id: "horror",      label: "HORROR" },
+  { id: "documentary", label: "DOCUMENTARY" },
 ];
 
 export default function ThemeSelector({ theme, setTheme, disabled }) {
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-medium text-gray-400 uppercase tracking-wider">
+    <div className="flex flex-col items-center gap-3">
+      <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">
         Cinematic Theme
-      </label>
-      <div className="grid grid-cols-3 gap-2.5">
+      </span>
+      <div className="flex flex-wrap justify-center gap-px border border-white/10 rounded-sm overflow-hidden">
         {THEMES.map((t) => (
           <button
             key={t.id}
             onClick={() => setTheme(t.id)}
             disabled={disabled}
             className={`
-              relative px-4 py-3 rounded-xl text-left transition-all duration-200
-              border
+              px-4 py-2 text-[11px] font-mono tracking-widest uppercase
+              transition-all duration-150
               ${theme === t.id
-                ? "border-brand-500 bg-brand-500/10 ring-1 ring-brand-500/40"
-                : "border-gray-800 bg-gray-900/60 hover:border-gray-600 hover:bg-gray-800/60"
+                ? "bg-white text-black"
+                : "bg-black text-white/40 hover:text-white/80 hover:bg-white/5"
               }
-              ${disabled ? "opacity-50 pointer-events-none" : ""}
+              ${disabled ? "opacity-40 pointer-events-none" : "cursor-pointer"}
             `}
           >
-            <div className="text-sm font-semibold">{t.label}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{t.desc}</div>
-            {theme === t.id && (
-              <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-brand-400" />
-            )}
+            {t.label}
           </button>
         ))}
       </div>
