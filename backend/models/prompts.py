@@ -68,8 +68,8 @@ def build_script_prompt(
     )
 
     return f"""You are an award-winning short film director. Given the following scene analysis from
-a photo collection, write a cinematic script that turns these moments into a
-compelling short film (~{duration_target} seconds).
+a photo collection ({num_photos} photos), craft a cinematic narrative and select ONE single
+key image to generate a short preview video clip (~8 seconds).
 
 Scene Analysis:
 {scene_analysis_json}
@@ -77,70 +77,49 @@ Scene Analysis:
 Theme Direction: {theme_instruction}
 
 ━━━ HOW VIDEO GENERATION WORKS ━━━
-For EACH clip you write, we will:
-  1. Take the KEY PHOTO you pick as the starting frame / visual anchor.
+You will pick ONE key photo from the collection. We will:
+  1. Take that photo as the starting frame / visual anchor.
   2. Send your veo_prompt + that photo to Veo (image-to-video AI).
-  3. Veo generates an 8-second video clip that starts from that photo and
+  3. Veo generates an 8-second video clip that starts from the photo and
      applies the camera motion, mood, and action you describe.
 
-So your veo_prompt must describe MOTION STARTING FROM the key photo:
+Choose the photo that BEST REPRESENTS the overall story — the most visually
+compelling, emotionally resonant, or narratively central image.
+
+Your veo_prompt must describe CINEMATIC MOTION STARTING FROM that photo:
   ✓ "Camera slowly pulls back from the subject's face revealing the cityscape behind them, golden hour light sweeping across the buildings"
-  ✗ "A photo of a person in front of a city" (this is static — useless)
+  ✗ "A photo of a person in front of a city" (static — useless for video)
 
 ━━━ OUTPUT FORMAT ━━━
-For each clip, specify:
-- clip_number: sequential integer starting from 1
-- key_photo_id: the photo ID (from the analysis) that best represents this moment.
-  This photo becomes the starting frame for video generation.
-  EVERY photo should be used as a key_photo_id in exactly one clip. You have {num_photos} photos.
-- veo_prompt: A rich, cinematic prompt describing the VIDEO MOTION that Veo
-  should generate starting from the key photo. Include:
-  • Camera movement (slow pan, dolly out, tracking shot, crane up, etc.)
-  • Action / motion in the scene (wind blowing, people walking, waves crashing)
-  • Lighting and atmosphere changes
-  • Cinematic style (shallow DOF, film grain, anamorphic, color palette)
-  • Audio direction (ambient sounds, music feel — Veo generates native audio)
-- duration_seconds: always 8 (Veo default clip length)
-- transition_to_next: one of: "crossfade", "cut", "zoom_through", "match_cut", "whip_pan", "wipe", "fade"
-- audio_mood: what the audio/music should feel like during this clip
-- narration: optional brief voice-over or text overlay (keep it evocative, max 10 words)
-- scene_description: 1-2 sentence human-readable description of what this clip shows
+Output as JSON with this EXACT schema — one clip only:
+{{
+  "title": "Film Title (evocative, 2-5 words)",
+  "overall_mood": "dominant mood across all photos",
+  "music_direction": "Description of the musical score — instruments, tempo, emotional arc",
+  "narrative_summary": "2-4 sentence summary of the full story these {num_photos} photos tell together. Describe the arc, setting, and emotional journey.",
+  "clip": {{
+    "clip_number": 1,
+    "key_photo_id": 0,
+    "veo_prompt": "Camera slowly pulls back from the subject revealing...",
+    "duration_seconds": 8,
+    "transition_to_next": "fade",
+    "audio_mood": "gentle ambient warmth",
+    "narration": "Optional evocative caption, max 10 words",
+    "scene_description": "1-2 sentence description of what this clip shows and why this photo was chosen as the representative frame"
+  }}
+}}
 
 IMPORTANT RULES:
-1. Use EVERY uploaded photo exactly once as a key_photo_id. You have {num_photos} photos (IDs 0 through {num_photos - 1}).
-2. Order the clips to tell a coherent narrative — it doesn't have to follow photo order.
-3. The veo_prompt must describe CINEMATIC MOTION, not a static scene.
-4. Include audio direction in the veo_prompt (Veo 3.1 generates native audio).
-5. Vary pacing: mix slow contemplative clips with dynamic energetic ones.
-6. Total clips = {num_photos} (one per photo).
+1. key_photo_id must be one of: 0 through {num_photos - 1}. Pick the SINGLE BEST one.
+2. The veo_prompt must describe CINEMATIC MOTION, not a static description.
+3. Include audio direction in the veo_prompt (Veo 3.1 generates native audio).
+4. narrative_summary should weave together the story across ALL {num_photos} photos.
 
 ⚠️ VEO SAFETY — CRITICAL:
 - NEVER mention real people's names in veo_prompt (e.g. no "John", "Taylor Swift", etc.)
 - NEVER reference celebrities, public figures, or named individuals.
-- Use generic descriptors instead: "the subject", "the figure", "the person",
-  "the woman", "the man", "the group", "the couple", "the child", etc.
-- Veo WILL REJECT any prompt containing real names or celebrity likenesses.
-- This rule applies ONLY to veo_prompt. The narration and scene_description
-  fields can use descriptive language freely.
-
-Output as JSON with this exact schema:
-{{
-  "title": "Film Title",
-  "overall_mood": "dominant mood",
-  "music_direction": "Description of the overall musical score — instruments, tempo, mood evolution across the film",
-  "clips": [
-    {{
-      "clip_number": 1,
-      "key_photo_id": 0,
-      "veo_prompt": "Camera slowly pulls back from the subject revealing...",
-      "duration_seconds": 8,
-      "transition_to_next": "crossfade",
-      "audio_mood": "gentle ambient warmth",
-      "narration": "Where it all began...",
-      "scene_description": "Opening shot starting from the beach portrait, camera reveals the sunset coastline"
-    }}
-  ]
-}}
+- Use generic descriptors: "the subject", "the figure", "the person", "the woman", "the man", etc.
+- Veo WILL REJECT prompts containing real names or celebrity likenesses.
 """
 
 

@@ -93,6 +93,16 @@ class Script(BaseModel):
     clips: list[Clip] = Field(default_factory=list)
 
 
+class SingleClipScript(BaseModel):
+    """Simplified script: Gemini summarizes all photos into one narrative
+    and picks a single best key image to generate one Veo preview clip."""
+    title: str = ""
+    overall_mood: str = ""
+    music_direction: str = ""
+    narrative_summary: str = ""   # full story summary across all photos
+    clip: Clip                    # the single clip to generate
+
+
 # ── Pipeline Progress ────────────────────────────────────────────────────────
 
 class ProgressUpdate(BaseModel):

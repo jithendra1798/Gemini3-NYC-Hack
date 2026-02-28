@@ -1,0 +1,15 @@
+[project]
+name = "gemini3-nyc-hack"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "fastapi>=0.134.0",
+    "google-genai>=1.65.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+    "python-multipart>=0.0.22",
+    "uvicorn[standard]>=0.41.0",
+]
