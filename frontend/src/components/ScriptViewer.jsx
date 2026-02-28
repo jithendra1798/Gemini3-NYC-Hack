@@ -15,6 +15,8 @@ export default function ScriptViewer({ jobId, activeVersion }) {
 
   if (!script) return null;
 
+  const clip = script.clip;
+
   return (
     <div className="w-full border border-white/10 rounded bg-black overflow-hidden script-panel animate-fade-in">
 
@@ -29,7 +31,7 @@ export default function ScriptViewer({ jobId, activeVersion }) {
             "{script.title}"
           </span>
           <span className="text-[9px] font-mono text-white/25">
-            {script.shots?.length || 0} shots · {script.overall_mood}
+            {script.overall_mood}
           </span>
         </div>
         <span className={`text-[10px] font-mono text-white/30 transition-transform duration-200 ${expanded ? "rotate-180 inline-block" : ""}`}>
@@ -41,6 +43,13 @@ export default function ScriptViewer({ jobId, activeVersion }) {
       {expanded && (
         <div className="border-t border-white/8 px-4 py-4 space-y-4">
 
+          {/* Narrative summary */}
+          {script.narrative_summary && (
+            <div className="text-[11px] text-white/50 leading-relaxed border-l border-white/10 pl-3">
+              {script.narrative_summary}
+            </div>
+          )}
+
           {/* Music */}
           {script.music_direction && (
             <div className="flex gap-3">
@@ -49,52 +58,42 @@ export default function ScriptViewer({ jobId, activeVersion }) {
             </div>
           )}
 
-          {/* Shot list */}
-          <div className="space-y-px">
-            {script.shots?.map((shot, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[32px_60px_1fr] gap-3 py-2.5 border-b border-white/5 last:border-0"
-              >
-                {/* Shot number */}
-                <span className="text-[9px] text-white/25 tabular-nums pt-0.5">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
+          {/* Single clip details */}
+          {clip && (
+            <div className="grid grid-cols-[32px_60px_1fr] gap-3 py-2.5 border-t border-white/5">
+              {/* Shot number */}
+              <span className="text-[9px] text-white/25 tabular-nums pt-0.5">01</span>
 
-                {/* Type badge */}
-                <span className={`
-                  text-[8px] tracking-widest uppercase self-start mt-0.5 px-1.5 py-0.5 rounded-sm border
-                  ${shot.shot_type === "photo"
-                    ? "border-white/20 text-white/50"
-                    : "border-white/10 text-white/25"
-                  }
-                `}>
-                  {shot.shot_type === "photo" ? `PHOTO` : `AI`}
-                </span>
+              {/* Type badge */}
+              <span className="text-[8px] tracking-widest uppercase self-start mt-0.5 px-1.5 py-0.5 rounded-sm border border-white/20 text-white/50">
+                KEY
+              </span>
 
-                {/* Details */}
-                <div className="space-y-0.5 min-w-0">
-                  <div className="text-[11px] text-white/60 leading-relaxed">
-                    {shot.veo_prompt || shot.camera_direction}
-                  </div>
-                  <div className="flex items-center gap-3 text-[9px] text-white/25">
-                    <span>{shot.duration_seconds}s</span>
-                    {shot.transition_to_next && (
-                      <span>→ {shot.transition_to_next}</span>
-                    )}
-                    {shot.shot_type === "photo" && shot.source_photo_id && (
-                      <span>frame #{shot.source_photo_id}</span>
-                    )}
-                  </div>
-                  {shot.narration && (
-                    <div className="text-[10px] text-white/30 italic pt-0.5">
-                      "{shot.narration}"
-                    </div>
+              {/* Details */}
+              <div className="space-y-0.5 min-w-0">
+                <div className="text-[11px] text-white/60 leading-relaxed">
+                  {clip.veo_prompt}
+                </div>
+                <div className="flex items-center gap-3 text-[9px] text-white/25">
+                  <span>{clip.duration_seconds}s</span>
+                  <span>photo #{clip.key_photo_id}</span>
+                  {clip.transition_to_next && (
+                    <span>→ {clip.transition_to_next}</span>
                   )}
                 </div>
+                {clip.scene_description && (
+                  <div className="text-[10px] text-white/35 pt-0.5">
+                    {clip.scene_description}
+                  </div>
+                )}
+                {clip.narration && (
+                  <div className="text-[10px] text-white/30 italic pt-0.5">
+                    "{clip.narration}"
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>

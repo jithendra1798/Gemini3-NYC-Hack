@@ -12,22 +12,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function generateVideoMock(photos, _opts, onProgress) {
   const steps = [
     { stage: "analyzing",  progress: 0.10, message: `Analyzing ${photos.length} photos with Gemini Vision…` },
-    { stage: "analyzing",  progress: 0.25, message: "Detecting scenes, mood, subjects…" },
+    { stage: "analyzing",  progress: 0.25, message: `Found 2 scenes — a story of light and motion across ${photos.length} moments…` },
     { stage: "scripting",  progress: 0.35, message: "Writing cinematic script…" },
-    { stage: "scripting",  progress: 0.50, message: "Generating shot list — 6 shots across 2 scenes…" },
-    { stage: "generating", progress: 0.55, message: "Rendering clip 01 / 06 with Veo 3.1…" },
-    { stage: "generating", progress: 0.62, message: "Rendering clip 02 / 06…" },
-    { stage: "generating", progress: 0.69, message: "Rendering clip 03 / 06…" },
-    { stage: "generating", progress: 0.76, message: "Rendering clip 04 / 06…" },
-    { stage: "generating", progress: 0.83, message: "Rendering clip 05 / 06…" },
-    { stage: "generating", progress: 0.88, message: "Rendering clip 06 / 06…" },
-    { stage: "assembling", progress: 0.92, message: "Assembling clips with FFmpeg…" },
-    { stage: "assembling", progress: 0.97, message: "Applying crossfade transitions…" },
+    { stage: "scripting",  progress: 0.50, message: "Script ready: \"Golden Hour\" — key frame selected (photo 0)" },
+    { stage: "generating", progress: 0.55, message: "Generating preview clip with Veo 3.1 (photo 0)…" },
+    { stage: "generating", progress: 0.90, message: "Clip generated — finalising…" },
     {
       stage: "complete",
       progress: 1.0,
-      message: "Your film is ready.",
-      // Use a public domain sample video for preview
+      message: "Your cinematic preview is ready!",
       video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       script_id: "mock-job-001",
     },
@@ -109,17 +102,20 @@ export async function generateVideo(
 export async function fetchScript(jobId) {
   if (MOCK) {
     return {
-      title: "A Day in the City",
+      title: "Golden Hour",
       overall_mood: "contemplative",
-      music_direction: "Ambient electronic with soft piano undertones",
-      shots: [
-        { shot_type: "photo", source_photo_id: 1, duration_seconds: 4, camera_direction: "Slow push-in", transition_to_next: "crossfade", narration: "The morning light breaks across the skyline." },
-        { shot_type: "generated", duration_seconds: 3, veo_prompt: "Aerial drone shot rising above city rooftops at golden hour", transition_to_next: "fade", narration: null },
-        { shot_type: "photo", source_photo_id: 2, duration_seconds: 5, camera_direction: "Pan left", transition_to_next: "wiperight", narration: "Every corner holds a story." },
-        { shot_type: "generated", duration_seconds: 3, veo_prompt: "Close-up of hands holding a coffee cup, steam rising", transition_to_next: "crossfade", narration: null },
-        { shot_type: "photo", source_photo_id: 3, duration_seconds: 4, camera_direction: "Static wide", transition_to_next: "fade", narration: "The city breathes." },
-        { shot_type: "photo", source_photo_id: 4, duration_seconds: 5, camera_direction: "Slow zoom out", transition_to_next: "fade", narration: "And we move with it." },
-      ],
+      music_direction: "Ambient electronic with soft piano undertones, building gently to a warm resolution",
+      narrative_summary: "A quiet journey through light and stillness — the photos capture fleeting moments of everyday life rendered extraordinary by golden afternoon light. The figures move unhurried through their world, each frame a breath held just long enough to notice beauty.",
+      clip: {
+        clip_number: 1,
+        key_photo_id: 0,
+        veo_prompt: "Camera slowly pulls back from the subject revealing the warm cityscape behind them, golden hour light sweeping across rooftops as a gentle breeze stirs the scene. Shallow depth of field, film grain, anamorphic lens flare.",
+        duration_seconds: 8,
+        transition_to_next: "fade",
+        audio_mood: "warm ambient with distant city hum",
+        narration: "Where the light falls, stories begin.",
+        scene_description: "The most visually compelling frame — chosen as the emotional anchor for the whole narrative.",
+      },
     };
   }
   const res = await fetch(`${API_BASE}/api/scripts/${jobId}`);
