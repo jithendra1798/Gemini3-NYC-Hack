@@ -4,6 +4,42 @@
 
 const API_BASE = process.env.REACT_APP_API_URL || "";
 
+// ── Mock mode — set REACT_APP_MOCK=true in .env.local to skip real API ────────
+const MOCK = process.env.REACT_APP_MOCK === "true";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function generateVideoMock(photos, _opts, onProgress) {
+  const steps = [
+    { stage: "analyzing",  progress: 0.10, message: `Analyzing ${photos.length} photos with Gemini Vision…` },
+    { stage: "analyzing",  progress: 0.25, message: "Detecting scenes, mood, subjects…" },
+    { stage: "scripting",  progress: 0.35, message: "Writing cinematic script…" },
+    { stage: "scripting",  progress: 0.50, message: "Generating shot list — 6 shots across 2 scenes…" },
+    { stage: "generating", progress: 0.55, message: "Rendering clip 01 / 06 with Veo 3.1…" },
+    { stage: "generating", progress: 0.62, message: "Rendering clip 02 / 06…" },
+    { stage: "generating", progress: 0.69, message: "Rendering clip 03 / 06…" },
+    { stage: "generating", progress: 0.76, message: "Rendering clip 04 / 06…" },
+    { stage: "generating", progress: 0.83, message: "Rendering clip 05 / 06…" },
+    { stage: "generating", progress: 0.88, message: "Rendering clip 06 / 06…" },
+    { stage: "assembling", progress: 0.92, message: "Assembling clips with FFmpeg…" },
+    { stage: "assembling", progress: 0.97, message: "Applying crossfade transitions…" },
+    {
+      stage: "complete",
+      progress: 1.0,
+      message: "Your film is ready.",
+      // Use a public domain sample video for preview
+      video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      script_id: "mock-job-001",
+    },
+  ];
+
+  for (const step of steps) {
+    await sleep(900);
+    onProgress?.(step);
+    if (step.stage === "complete") return step;
+  }
+}
+
 /**
  * Upload photos and stream pipeline progress via SSE.
  *
@@ -19,6 +55,7 @@ export async function generateVideo(
   { theme = "auto", durationTarget = 30, aspectRatio = "16:9" } = {},
   onProgress
 ) {
+  if (MOCK) return generateVideoMock(photos, { theme, durationTarget, aspectRatio }, onProgress);
   const formData = new FormData();
   photos.forEach((file) => formData.append("photos", file));
   formData.append("theme", theme);
@@ -70,6 +107,21 @@ export async function generateVideo(
  * Fetch the generated script for a job.
  */
 export async function fetchScript(jobId) {
+  if (MOCK) {
+    return {
+      title: "A Day in the City",
+      overall_mood: "contemplative",
+      music_direction: "Ambient electronic with soft piano undertones",
+      shots: [
+        { shot_type: "photo", source_photo_id: 1, duration_seconds: 4, camera_direction: "Slow push-in", transition_to_next: "crossfade", narration: "The morning light breaks across the skyline." },
+        { shot_type: "generated", duration_seconds: 3, veo_prompt: "Aerial drone shot rising above city rooftops at golden hour", transition_to_next: "fade", narration: null },
+        { shot_type: "photo", source_photo_id: 2, duration_seconds: 5, camera_direction: "Pan left", transition_to_next: "wiperight", narration: "Every corner holds a story." },
+        { shot_type: "generated", duration_seconds: 3, veo_prompt: "Close-up of hands holding a coffee cup, steam rising", transition_to_next: "crossfade", narration: null },
+        { shot_type: "photo", source_photo_id: 3, duration_seconds: 4, camera_direction: "Static wide", transition_to_next: "fade", narration: "The city breathes." },
+        { shot_type: "photo", source_photo_id: 4, duration_seconds: 5, camera_direction: "Slow zoom out", transition_to_next: "fade", narration: "And we move with it." },
+      ],
+    };
+  }
   const res = await fetch(`${API_BASE}/api/scripts/${jobId}`);
   if (!res.ok) throw new Error("Script not found");
   return res.json();
