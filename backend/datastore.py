@@ -178,3 +178,24 @@ def get_all_versions(job_id: str) -> list[dict]:
             "num_clips": len(ver.get("script", {}).get("clips", [])) if ver.get("script") else 0,
         })
     return summaries
+
+
+# ── Duplicate Detection ───────────────────────────────────────────────────────
+
+def store_photo_fingerprint(job_id: str, fingerprint: str) -> None:
+    """Store a SHA-256 fingerprint for the project's photo set."""
+    store = _load()
+    proj = store["projects"].get(job_id)
+    if proj:
+        proj["photo_fingerprint"] = fingerprint
+        _save(store)
+        logger.info("Datastore: stored fingerprint %s… for project %s", fingerprint[:12], job_id)
+
+
+def find_duplicate_project(fingerprint: str) -> Optional[str]:
+    """Find a project with the same photo fingerprint. Returns job_id or None."""
+    store = _load()
+    for job_id, proj in store["projects"].items():
+        if proj.get("photo_fingerprint") == fingerprint:
+            return job_id
+    return None

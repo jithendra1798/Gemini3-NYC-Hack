@@ -219,3 +219,27 @@ export async function fetchScriptVersion(jobId, version) {
   if (!res.ok) throw new Error("Script not found");
   return res.json();
 }
+
+/**
+ * List all projects with summary info.
+ */
+export async function fetchProjects() {
+  const res = await fetch(`${API_BASE}/api/projects`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+/**
+ * Check for duplicate project by uploading file metadata.
+ * Returns { duplicate: true, job_id: "..." } if match found.
+ */
+export async function checkDuplicate(photos) {
+  const meta = photos.map((f) => ({ name: f.name, size: f.size, lastModified: f.lastModified }));
+  const res = await fetch(`${API_BASE}/api/check-duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files: meta }),
+  });
+  if (!res.ok) return { duplicate: false };
+  return res.json();
+}

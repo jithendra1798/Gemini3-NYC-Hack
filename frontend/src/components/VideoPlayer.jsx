@@ -61,6 +61,30 @@ export default function VideoPlayer({ videoUrl }) {
           CINESNAP
         </div>
       </div>
+
+      {/* Controls bar */}
+      <div className="flex items-center justify-between">
+        <div className="text-[9px] font-mono text-white/20 tracking-widest">
+          Click to play / pause
+        </div>
+        <a
+          href={videoUrl}
+          download="cinesnap-film.mp4"
+          className="
+            inline-flex items-center gap-2 px-4 py-1.5
+            text-[10px] font-mono tracking-[0.15em] uppercase
+            border border-white/20 text-white/50
+            hover:border-white/50 hover:text-white hover:bg-white/5
+            transition-all duration-200
+          "
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Download
+        </a>
+      </div>
     </div>
   );
 }

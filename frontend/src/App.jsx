@@ -5,7 +5,8 @@ import ProgressTracker from "./components/ProgressTracker";
 import VideoPlayer from "./components/VideoPlayer";
 import ScriptViewer from "./components/ScriptViewer";
 import VersionHistory from "./components/VersionHistory";
-import { generateVideo, regenerateVideo } from "./api/client";
+import ProjectGallery from "./components/ProjectGallery";
+import { generateVideo, regenerateVideo, checkDuplicate, fetchProjects } from "./api/client";
 
 export default function App() {
   const [photos, setPhotos] = useState([]);
@@ -17,6 +18,13 @@ export default function App() {
   const [jobId, setJobId] = useState(null);
   const [activeVersion, setActiveVersion] = useState(null);
   const [error, setError] = useState(null);
+  const [showGallery, setShowGallery] = useState(false);
+  const [projectCount, setProjectCount] = useState(0);
+
+  // Load project count on mount
+  React.useEffect(() => {
+    fetchProjects().then((p) => setProjectCount(p.length)).catch(() => {});
+  }, [finalVideoUrl]); // refresh after new generations too
 
   const handleGenerate = async () => {
     if (photos.length === 0) return;
@@ -27,6 +35,25 @@ export default function App() {
     setError(null);
 
     try {
+      // ── Duplicate detection: check if same files already exist ──
+      const dupResult = await checkDuplicate(photos);
+      if (dupResult.duplicate && dupResult.job_id) {
+        // Same photos already uploaded — regenerate instead of new project
+        setJobId(dupResult.job_id);
+        setProgress({ stage: "info", progress: 0, message: "Duplicate detected — regenerating from existing project…" });
+
+        const result = await regenerateVideo(
+          dupResult.job_id,
+          { theme, durationTarget: 30, aspectRatio: "16:9" },
+          (update) => {
+            setProgress(update);
+            if (update.video_url) setFinalVideoUrl(update.video_url);
+          }
+        );
+        if (result?.stage === "error") setError(result.message);
+        return;
+      }
+
       const result = await generateVideo(
         photos,
         { theme, durationTarget: 30, aspectRatio: "16:9" },
@@ -55,6 +82,7 @@ export default function App() {
     setJobId(null);
     setActiveVersion(null);
     setError(null);
+    setShowGallery(false);
   };
 
   const handleRegenerate = async () => {
@@ -96,7 +124,23 @@ export default function App() {
     }
   };
 
-  const showUpload = !isProcessing && !finalVideoUrl;
+  const handleSelectProject = (proj) => {
+    // Load a past project into the result view
+    setShowGallery(false);
+    setJobId(proj.job_id);
+
+    if (proj.latest_video_url && proj.latest_status === "complete") {
+      setFinalVideoUrl(proj.latest_video_url);
+    } else {
+      setFinalVideoUrl(null);
+    }
+    setActiveVersion(null);
+    setError(null);
+    setIsProcessing(false);
+    setProgress(null);
+  };
+
+  const showUpload = !isProcessing && !finalVideoUrl && !showGallery;
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -114,14 +158,25 @@ export default function App() {
             </span>
           </div>
 
-          {(isProcessing || finalVideoUrl) && (
-            <button
-              onClick={handleReset}
-              className="text-[10px] font-mono text-white/30 hover:text-white/70 tracking-widest uppercase transition-colors border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-sm"
-            >
-              ← Restart
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {(isProcessing || finalVideoUrl || showGallery) && (
+              <button
+                onClick={handleReset}
+                className="text-[10px] font-mono text-white/30 hover:text-white/70 tracking-widest uppercase transition-colors border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-sm"
+              >
+                ← Restart
+              </button>
+            )}
+
+            {!isProcessing && !showGallery && projectCount > 0 && (
+              <button
+                onClick={() => setShowGallery(true)}
+                className="text-[10px] font-mono text-white/30 hover:text-white/70 tracking-widest uppercase transition-colors border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-sm"
+              >
+                Projects · {projectCount}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -180,6 +235,14 @@ export default function App() {
               </p>
             )}
           </div>
+        )}
+
+        {/* ── GALLERY STATE ────────────────────────────────────────────────── */}
+        {showGallery && (
+          <ProjectGallery
+            onSelectProject={handleSelectProject}
+            onClose={() => setShowGallery(false)}
+          />
         )}
 
         {/* ── PROCESSING STATE ─────────────────────────────────────────────── */}
