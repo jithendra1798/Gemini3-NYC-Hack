@@ -86,8 +86,8 @@ def assemble_video(
 
         # Pick transition type from script (default fade)
         transition = Transition.CROSSFADE
-        if i < len(script.shots):
-            transition = script.shots[i].transition_to_next
+        if i < len(script.clips):
+            transition = script.clips[i].transition_to_next
         xfade = _XFADE_MAP.get(transition, "fade")
 
         video_filters.append(

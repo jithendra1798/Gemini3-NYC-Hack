@@ -133,3 +133,93 @@ export async function fetchScript(jobId) {
 export function videoUrl(jobId) {
   return `${API_BASE}/api/videos/${jobId}.mp4`;
 }
+
+// ── Projects & Versions ────────────────────────────────────────────────────
+
+/**
+ * Get all versions for a project.
+ */
+export async function fetchVersions(jobId) {
+  const res = await fetch(`${API_BASE}/api/projects/${jobId}/versions`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+/**
+ * Get the full project details.
+ */
+export async function fetchProject(jobId) {
+  const res = await fetch(`${API_BASE}/api/projects/${jobId}`);
+  if (!res.ok) throw new Error("Project not found");
+  return res.json();
+}
+
+/**
+ * Get the uploaded photos for a project.
+ */
+export async function fetchPhotos(jobId) {
+  const res = await fetch(`${API_BASE}/api/projects/${jobId}/photos`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+/**
+ * Regenerate video from existing photos — returns SSE stream.
+ */
+export async function regenerateVideo(
+  jobId,
+  { theme = "auto", durationTarget = 30, aspectRatio = "16:9" } = {},
+  onProgress
+) {
+  const formData = new FormData();
+  formData.append("theme", theme);
+  formData.append("duration_target", String(durationTarget));
+  formData.append("aspect_ratio", aspectRatio);
+
+  const response = await fetch(`${API_BASE}/api/projects/${jobId}/regenerate`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || `Regeneration failed (${response.status})`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastEvent = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          lastEvent = data;
+          if (onProgress) onProgress(data);
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
+  }
+
+  return lastEvent;
+}
+
+/**
+ * Fetch script for a specific version.
+ */
+export async function fetchScriptVersion(jobId, version) {
+  const res = await fetch(`${API_BASE}/api/scripts/${jobId}/${version}`);
+  if (!res.ok) throw new Error("Script not found");
+  return res.json();
+}

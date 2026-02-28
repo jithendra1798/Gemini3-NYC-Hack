@@ -4,15 +4,18 @@ import ThemeSelector from "./components/ThemeSelector";
 import ProgressTracker from "./components/ProgressTracker";
 import VideoPlayer from "./components/VideoPlayer";
 import ScriptViewer from "./components/ScriptViewer";
-import { generateVideo } from "./api/client";
+import VersionHistory from "./components/VersionHistory";
+import { generateVideo, regenerateVideo } from "./api/client";
 
 export default function App() {
   const [photos, setPhotos] = useState([]);
   const [theme, setTheme] = useState("auto");
   const [progress, setProgress] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState(null);
   const [jobId, setJobId] = useState(null);
+  const [activeVersion, setActiveVersion] = useState(null);
   const [error, setError] = useState(null);
 
   const handleGenerate = async () => {
@@ -47,9 +50,50 @@ export default function App() {
     setTheme("auto");
     setProgress(null);
     setIsProcessing(false);
+    setIsRegenerating(false);
     setFinalVideoUrl(null);
     setJobId(null);
+    setActiveVersion(null);
     setError(null);
+  };
+
+  const handleRegenerate = async () => {
+    if (!jobId) return;
+
+    setIsRegenerating(true);
+    setIsProcessing(true);
+    setProgress(null);
+    setError(null);
+
+    try {
+      const result = await regenerateVideo(
+        jobId,
+        { theme, durationTarget: 30, aspectRatio: "16:9" },
+        (update) => {
+          setProgress(update);
+          if (update.video_url) {
+            setFinalVideoUrl(update.video_url);
+          }
+        }
+      );
+
+      if (result?.stage === "error") {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError(err.message);
+      setProgress({ stage: "error", progress: 0, message: err.message });
+    } finally {
+      setIsProcessing(false);
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleSelectVersion = (ver) => {
+    if (ver.video_url && ver.status === "complete") {
+      setFinalVideoUrl(ver.video_url);
+      setActiveVersion(ver.version);
+    }
   };
 
   const showUpload = !isProcessing && !finalVideoUrl;
@@ -156,7 +200,14 @@ export default function App() {
         {finalVideoUrl && !isProcessing && (
           <div className="max-w-3xl w-full mx-auto space-y-6 animate-fade-in">
             <VideoPlayer videoUrl={finalVideoUrl} />
-            <ScriptViewer jobId={jobId} />
+            <VersionHistory
+              jobId={jobId}
+              currentVideoUrl={finalVideoUrl}
+              onSelectVersion={handleSelectVersion}
+              onRegenerate={handleRegenerate}
+              isRegenerating={isRegenerating}
+            />
+            <ScriptViewer jobId={jobId} activeVersion={activeVersion} />
           </div>
         )}
 

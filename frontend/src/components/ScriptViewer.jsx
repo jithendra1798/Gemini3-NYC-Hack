@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { fetchScript } from "../api/client";
+import { fetchScript, fetchScriptVersion } from "../api/client";
 
-export default function ScriptViewer({ jobId }) {
+export default function ScriptViewer({ jobId, activeVersion }) {
   const [script, setScript] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
-    fetchScript(jobId).then(setScript).catch(() => {});
-  }, [jobId]);
+    const loader = activeVersion
+      ? fetchScriptVersion(jobId, activeVersion)
+      : fetchScript(jobId);
+    loader.then(setScript).catch(() => {});
+  }, [jobId, activeVersion]);
 
   if (!script) return null;
 
