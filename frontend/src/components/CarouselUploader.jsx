@@ -125,21 +125,24 @@ function PhotoCard({ idx, url, w, h, angle, radius, onRemove, disabled, isAdd, o
 
   return (
     <div className="carousel-card group" style={style}>
-      {url
-        ? <img src={url} alt={`Photo ${idx + 1}`} />
-        : <div className="w-full h-full bg-white/5 shimmer-bg" />
-      }
-      <span className="absolute bottom-2 left-2 text-[9px] font-mono bg-black/70 text-white/60 px-1.5 py-0.5 rounded leading-none">
-        {String(idx + 1).padStart(2, "0")}
-      </span>
-      {!disabled && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(idx); }}
-          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/80 text-white/60 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"
-        >
-          ✕
-        </button>
-      )}
+      {/* Inner wrapper animates independently — outer div's 3D transform is untouched */}
+      <div className="carousel-card-inner-enter absolute inset-0">
+        {url
+          ? <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+          : <div className="w-full h-full bg-white/5 shimmer-bg" />
+        }
+        <span className="absolute bottom-2 left-2 text-[9px] font-mono bg-black/70 text-white/60 px-1.5 py-0.5 rounded leading-none">
+          {String(idx + 1).padStart(2, "0")}
+        </span>
+        {!disabled && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(idx); }}
+            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/80 text-white/60 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -251,7 +254,7 @@ export default function CarouselUploader({ photos, setPhotos, disabled }) {
             const h = dim ? dim.h : CARD_MAX_H;
             return (
               <PhotoCard
-                key={idx}
+                key={file}
                 idx={idx}
                 url={url}
                 w={w}

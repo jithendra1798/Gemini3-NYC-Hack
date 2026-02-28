@@ -35,6 +35,66 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Card inner content fades + scales in — outer 3D div is untouched */
+@keyframes cardEnter {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.carousel-card-inner-enter {
+  animation: cardEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Processing panel drops in like a camera shutter */
+@keyframes shutterDrop {
+  0%   { opacity: 0; transform: translateY(-12px); clip-path: inset(0 0 100% 0); }
+  40%  { opacity: 1; clip-path: inset(0 0 0% 0); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-shutter-drop {
+  animation: shutterDrop 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Video player rises like a projection screen being raised */
+@keyframes curtainLift {
+  0%   { opacity: 0; transform: translateY(18px) scaleY(0.97); }
+  100% { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+.animate-curtain-lift {
+  animation: curtainLift 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+/* ■ symbol flickers on like a projector catching a new reel */
+@keyframes filmBurn {
+  0%   { opacity: 0; filter: brightness(4) blur(1px); }
+  15%  { opacity: 1; filter: brightness(2); }
+  30%  { opacity: 0.6; filter: brightness(1); }
+  60%  { opacity: 1; filter: brightness(1.2); }
+  100% { opacity: 0.85; filter: brightness(1); }
+}
+.animate-film-burn {
+  animation: filmBurn 0.9s ease-out forwards;
+}
+
+/* Single outward border pulse on completion */
+@keyframes borderPulseOnce {
+  0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.4); }
+  50%  { box-shadow: 0 0 0 8px rgba(255,255,255,0.0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+}
+.animate-border-pulse-once {
+  animation: borderPulseOnce 0.8s ease-out forwards;
+}
+
+/* Progress bar brightness flash at 100% */
+@keyframes barFlash {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(2.5); }
+  100% { filter: brightness(1); }
+}
+.animate-bar-flash {
+  animation: barFlash 0.6s ease-out forwards;
+}
+
 /* ── 3D Carousel ──────────────────────────────────────────────────────────── */
 .carousel-scene {
   width: 100%;

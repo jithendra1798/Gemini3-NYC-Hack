@@ -14,7 +14,7 @@ export default function VideoPlayer({ videoUrl }) {
   };
 
   return (
-    <div className="w-full space-y-4 animate-fade-in">
+    <div className="w-full space-y-4 animate-curtain-lift">
       <div className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-2">
         Film Preview
       </div>
@@ -36,23 +36,29 @@ export default function VideoPlayer({ videoUrl }) {
           className="absolute inset-0 w-full h-full object-contain"
         />
 
-        {/* Play/pause overlay — shows briefly on click */}
+        {/* Play/pause overlay */}
         <div className={`
           absolute inset-0 flex items-center justify-center
           bg-black/20 transition-opacity duration-300
           ${isPlaying ? "opacity-0 group-hover:opacity-100" : "opacity-100"}
         `}>
-          <div className="w-14 h-14 rounded-full border border-white/30 flex items-center justify-center bg-black/50">
-            {isPlaying ? (
-              <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+          <div className="w-14 h-14 rounded-full border border-white/30 flex items-center justify-center bg-black/50 transition-transform duration-150 active:scale-90">
+            {/* Both icons always in DOM — crossfade via opacity */}
+            <div className="relative w-5 h-5">
+              <svg
+                className={`absolute inset-0 w-5 h-5 text-white/70 transition-opacity duration-200 ${isPlaying ? "opacity-0" : "opacity-100"}`}
+                fill="currentColor" viewBox="0 0 24 24"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <svg
+                className={`absolute inset-0 w-5 h-5 text-white/70 transition-opacity duration-200 ${isPlaying ? "opacity-100" : "opacity-0"}`}
+                fill="currentColor" viewBox="0 0 24 24"
+              >
                 <rect x="6" y="5" width="4" height="14" rx="1" />
                 <rect x="14" y="5" width="4" height="14" rx="1" />
               </svg>
-            ) : (
-              <svg className="w-5 h-5 text-white/70 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
+            </div>
           </div>
         </div>
 

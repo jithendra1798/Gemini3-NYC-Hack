@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const STAGES = [
   {
@@ -39,6 +39,12 @@ function StagePreview({ stageKey, photos, message }) {
   const linesRef = useRef([]);
   const timerRef = useRef(null);
 
+  // Stable object URLs — created once per file, revoked on unmount
+  const photoUrls = useMemo(() => {
+    return (photos || []).slice(0, 6).map((f) => URL.createObjectURL(f));
+  }, []); // intentionally stable — photos won't change during processing
+  useEffect(() => () => photoUrls.forEach((u) => URL.revokeObjectURL(u)), [photoUrls]);
+
   // For scripting: simulate script lines appearing one by one
   useEffect(() => {
     if (stageKey !== "scripting") return;
@@ -76,11 +82,11 @@ function StagePreview({ stageKey, photos, message }) {
     return (
       <div className="relative w-full h-36 rounded border border-white/8 bg-black overflow-hidden flex flex-wrap gap-1 p-2">
         <div className="scan-line" />
-        {photos.length > 0 ? (
-          photos.slice(0, 6).map((file, i) => (
+        {photoUrls.length > 0 ? (
+          photoUrls.map((url, i) => (
             <div key={i} className="relative flex-1 min-w-[60px] h-full rounded overflow-hidden">
               <img
-                src={URL.createObjectURL(file)}
+                src={url}
                 alt=""
                 className="w-full h-full object-cover opacity-70"
               />
@@ -175,9 +181,9 @@ function StagePreview({ stageKey, photos, message }) {
 
   if (stageKey === "complete") {
     return (
-      <div className="w-full h-36 rounded border border-white/8 bg-black overflow-hidden flex items-center justify-center">
+      <div className="w-full h-36 rounded border border-white/8 bg-black overflow-hidden flex items-center justify-center animate-border-pulse-once">
         <div className="text-center space-y-1">
-          <div className="text-2xl font-light text-white/80 tracking-widest">■</div>
+          <div className="text-2xl font-light text-white/80 tracking-widest animate-film-burn">■</div>
           <span className="text-[10px] font-mono text-white/40 tracking-widest uppercase">Film ready</span>
         </div>
       </div>
@@ -205,7 +211,14 @@ export default function ProgressTracker({ progress, photos }) {
       <div className="grid grid-cols-[200px_1fr] gap-6">
 
         {/* Left: stage list */}
-        <div className="space-y-0 border-l border-white/8">
+        <div className="space-y-0 relative">
+          {/* Static track line */}
+          <div className="absolute left-0 top-0 w-px h-full bg-white/8" />
+          {/* Animated fill line — grows downward as stages complete */}
+          <div
+            className="absolute left-0 top-0 w-px bg-white/50 transition-all duration-700 ease-out"
+            style={{ height: `${Math.min(100, (currentIdx / (STAGES.length - 1)) * 100)}%` }}
+          />
           {STAGES.map((s, idx) => {
             const isActive = s.key === stage;
             const isDone = currentIdx > idx || stage === "complete";
@@ -272,7 +285,7 @@ export default function ProgressTracker({ progress, photos }) {
       <div className="space-y-2">
         <div className="h-px bg-white/8 relative overflow-hidden">
           <div
-            className="absolute inset-y-0 left-0 bg-white transition-all duration-700 ease-out"
+            className={`absolute inset-y-0 left-0 bg-white transition-all duration-700 ease-out ${percentage === 100 ? "animate-bar-flash" : ""}`}
             style={{ width: `${percentage}%` }}
           />
         </div>

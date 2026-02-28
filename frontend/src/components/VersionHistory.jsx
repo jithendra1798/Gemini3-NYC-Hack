@@ -10,119 +10,112 @@ export default function VersionHistory({ jobId, currentVideoUrl, onSelectVersion
     fetchVersions(jobId)
       .then((v) => setVersions(v))
       .catch(() => {});
-  }, [jobId, currentVideoUrl]); // re-fetch when new video is generated
+  }, [jobId, currentVideoUrl]);
 
   if (versions.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-900/60 overflow-hidden">
-      {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-800/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-xl">🔄</span>
-          <div className="text-left">
-            <div className="font-semibold text-gray-100">
-              Version History
-            </div>
-            <div className="text-sm text-gray-400">
-              {versions.length} version{versions.length !== 1 ? "s" : ""} generated
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Regenerate button (always visible in header) */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRegenerate?.();
-            }}
-            disabled={isRegenerating}
-            className="
-              px-4 py-2 rounded-xl text-sm font-medium
-              bg-gradient-to-r from-purple-600 to-purple-500
-              hover:from-purple-500 hover:to-purple-400
-              disabled:opacity-50 disabled:cursor-not-allowed
-              text-white transition-all duration-200
-            "
-          >
-            {isRegenerating ? (
-              <span className="flex items-center gap-2">
-                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Regenerating…
-              </span>
-            ) : (
-              "✨ Regenerate"
-            )}
-          </button>
-          <svg
-            className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-          </svg>
-        </div>
-      </button>
+    <div className="w-full border border-white/10 rounded bg-black overflow-hidden script-panel animate-fade-in">
+
+      {/* Header row */}
+      <div className="flex items-center justify-between px-4 py-3">
+
+        {/* Left: label + toggle */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-3 hover:opacity-70 transition-opacity text-left"
+        >
+          <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Versions</span>
+          <span className="text-[11px] font-mono text-white/40">
+            {versions.length} generated
+          </span>
+          <span className={`text-[10px] font-mono text-white/30 transition-transform duration-200 ${expanded ? "rotate-180 inline-block" : ""}`}>
+            ▾
+          </span>
+        </button>
+
+        {/* Right: Regenerate */}
+        <button
+          onClick={() => onRegenerate?.()}
+          disabled={isRegenerating}
+          className="
+            flex items-center gap-2
+            px-3 py-1.5 text-[10px] font-mono tracking-widest uppercase
+            border border-white/20 text-white/50
+            hover:border-white/50 hover:text-white/80
+            active:scale-95
+            disabled:opacity-30 disabled:cursor-not-allowed
+            transition-all duration-150
+          "
+        >
+          {isRegenerating ? (
+            <>
+              <span className="w-2.5 h-2.5 border border-white/30 border-t-white rounded-full animate-spin" />
+              Generating…
+            </>
+          ) : (
+            <>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+              Regenerate
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Version list */}
       {expanded && (
-        <div className="px-6 pb-6 space-y-3 border-t border-gray-800 pt-4">
+        <div className="border-t border-white/8 divide-y divide-white/5">
           {versions.map((ver) => {
             const isActive = currentVideoUrl?.includes(`_v${ver.version}`);
             const date = new Date(ver.created_at);
-            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric" });
 
             return (
               <button
                 key={ver.version}
                 onClick={() => onSelectVersion?.(ver)}
+                disabled={ver.status !== "complete"}
                 className={`
-                  w-full text-left p-4 rounded-xl border text-sm transition-all duration-200
-                  ${isActive
-                    ? "border-brand-500/50 bg-brand-500/10 ring-1 ring-brand-500/30"
-                    : "border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/60 hover:border-gray-600"
-                  }
+                  w-full text-left px-4 py-3 flex items-center justify-between
+                  transition-colors duration-150
+                  ${isActive ? "bg-white/5" : "hover:bg-white/[0.03]"}
+                  disabled:opacity-40 disabled:cursor-not-allowed
                 `}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
-                      ${isActive
-                        ? "bg-brand-500/30 text-brand-300"
-                        : "bg-gray-700 text-gray-400"
-                      }
-                    `}>
-                      v{ver.version}
-                    </span>
-                    <div>
-                      <div className="text-gray-200 font-medium">
-                        {ver.title || `Version ${ver.version}`}
-                      </div>
-                      <div className="text-gray-500 text-xs mt-0.5">
-                        {dateStr} at {timeStr} · {ver.model} · {ver.num_clips} clips
-                      </div>
+                {/* Left: version number + meta */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`
+                    text-[10px] font-mono tabular-nums flex-shrink-0
+                    ${isActive ? "text-white" : "text-white/35"}
+                  `}>
+                    V{String(ver.version).padStart(2, "0")}
+                  </span>
+                  <div className="min-w-0 space-y-0.5">
+                    <div className={`text-[11px] font-mono truncate ${isActive ? "text-white/80" : "text-white/45"}`}>
+                      {ver.title || `Version ${ver.version}`}
+                    </div>
+                    <div className="text-[9px] font-mono text-white/20 tracking-widest">
+                      {dateStr} · {timeStr}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`
-                      px-2 py-0.5 rounded-full text-xs font-medium
-                      ${ver.status === "complete"
-                        ? "bg-green-500/20 text-green-300"
-                        : ver.status === "error"
-                          ? "bg-red-500/20 text-red-300"
-                          : "bg-yellow-500/20 text-yellow-300"
-                      }
-                    `}>
-                      {ver.status === "complete" ? "✓ Complete" : ver.status === "error" ? "✗ Failed" : "⏳ In progress"}
+                </div>
+
+                {/* Right: status + playing indicator */}
+                <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                  <span className={`
+                    text-[8px] font-mono tracking-widest uppercase
+                    ${ver.status === "complete" ? "text-white/40" : ver.status === "error" ? "text-white/30" : "text-white/20"}
+                  `}>
+                    {ver.status === "complete" ? "DONE" : ver.status === "error" ? "ERR" : "…"}
+                  </span>
+                  {isActive && (
+                    <span className="text-[8px] font-mono text-white/50 tracking-widest uppercase border border-white/20 px-1.5 py-0.5">
+                      Playing
                     </span>
-                    {isActive && (
-                      <span className="text-brand-400 text-xs font-medium">▶ Playing</span>
-                    )}
-                  </div>
+                  )}
                 </div>
               </button>
             );
