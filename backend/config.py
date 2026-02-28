@@ -30,6 +30,17 @@ for d in (UPLOAD_DIR, CLIPS_DIR, FINAL_DIR, SCRIPTS_DIR):
 # DEV_MODE=false → uses full-quality models for final demos
 DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")
 
+# ── Test Mode ─────────────────────────────────────────────────────────────────
+# TEST_MODE=true → skips all Gemini/Veo API calls and replays a pre-baked video
+# Useful for demoing the full UI flow without spending quota or waiting for generation
+TEST_MODE: bool = os.getenv("TEST_MODE", "false").lower() in ("true", "1", "yes")
+# Path to the pre-baked video served in test mode (relative to BASE_DIR, or absolute)
+_test_video_raw = os.getenv("TEST_VIDEO_PATH", "outputs/finals/test_demo.mp4")
+TEST_VIDEO_PATH: str = str(
+    Path(_test_video_raw) if Path(_test_video_raw).is_absolute()
+    else BASE_DIR / _test_video_raw
+)
+
 # ── Model Config (overridable via env) ────────────────────────────────────────
 GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-2.5-flash")
 GEMINI_TEXT_MODEL: str = os.getenv("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
