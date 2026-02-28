@@ -1,10 +1,9 @@
-"""Stage 3 — Video Generation using Veo 3.1."""
+"""Stage 3 — Video Generation using Veo 3.1 (image-to-video for every clip)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from pathlib import Path
 
 from google import genai
@@ -16,122 +15,156 @@ from ..config import (
     VEO_MODEL,
     VEO_POLL_INTERVAL,
 )
-from ..models.prompts import enhance_veo_prompt
-from ..models.schemas import Script, Shot, ShotType
+from ..models.prompts import enhance_veo_prompt, sanitize_veo_prompt
+from ..models.schemas import Clip, Script
 
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
 
 
 def _get_client() -> genai.Client:
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
-async def generate_shot(
-    shot: Shot,
+async def generate_clip(
+    clip: Clip,
     photo_paths: dict[int, str],
     job_id: str,
     aspect_ratio: str = "16:9",
 ) -> str:
-    """Generate a single video clip for a shot. Returns the output file path."""
+    """Generate a single video clip using image-to-video. Returns the output path."""
     client = _get_client()
-    output_path = CLIPS_DIR / f"{job_id}_shot_{shot.shot_number:03d}.mp4"
+    output_path = CLIPS_DIR / f"{job_id}_clip_{clip.clip_number:03d}.mp4"
 
-    if shot.shot_type == ShotType.PHOTO and shot.source_photo_id is not None:
-        # ── Image-to-video: animate the user's photo ──────────────────────
-        photo_file = photo_paths[shot.source_photo_id]
-        image_data = Path(photo_file).read_bytes()
+    # ── Load the key photo as the anchor frame ────────────────────────────
+    photo_file = photo_paths[clip.key_photo_id]
+    image_data = Path(photo_file).read_bytes()
 
-        suffix = Path(photo_file).suffix.lower()
-        mime = {".png": "image/png", ".webp": "image/webp"}.get(suffix, "image/jpeg")
-        image = types.Image(image_bytes=image_data, mime_type=mime)
+    suffix = Path(photo_file).suffix.lower()
+    mime = {".png": "image/png", ".webp": "image/webp"}.get(suffix, "image/jpeg")
+    image = types.Image(image_bytes=image_data, mime_type=mime)
 
-        prompt = enhance_veo_prompt(
-            f"{shot.camera_direction}. {shot.veo_prompt or ''}",
-            audio_mood=shot.audio_mood,
-        )
+    prompt = enhance_veo_prompt(clip.veo_prompt, audio_mood=clip.audio_mood)
 
-        logger.info("Shot %d → image-to-video (photo %d)", shot.shot_number, shot.source_photo_id)
+    logger.info(
+        "Clip %d → image-to-video (key photo %d) [%s]",
+        clip.clip_number,
+        clip.key_photo_id,
+        VEO_MODEL,
+    )
+    logger.info("Clip %d prompt: %.300s", clip.clip_number, prompt)
 
-        operation = client.models.generate_videos(
-            model=VEO_MODEL,
-            prompt=prompt,
-            image=image,
-            config=types.GenerateVideosConfig(
-                aspectRatio=aspect_ratio,
-                numberOfVideos=1,
-            ),
-        )
+    last_error: Exception | None = None
+    rai_filtered = False
 
-    else:
-        # ── Text-to-video: fully generated transition / establishing shot ─
-        prompt = enhance_veo_prompt(
-            shot.veo_prompt or shot.camera_direction,
-            audio_mood=shot.audio_mood,
-        )
+    for attempt in range(1, MAX_RETRIES + 1):
+        # If previous attempt was RAI-filtered, sanitize the prompt
+        if rai_filtered and attempt > 1:
+            prompt = sanitize_veo_prompt(prompt)
+            logger.info("Clip %d: using sanitized prompt: %.300s", clip.clip_number, prompt)
 
-        config_kwargs: dict = {
-            "aspectRatio": aspect_ratio,
-            "numberOfVideos": 1,
-        }
+        try:
+            operation = client.models.generate_videos(
+                model=VEO_MODEL,
+                prompt=prompt,
+                image=image,
+                config=types.GenerateVideosConfig(
+                    aspectRatio=aspect_ratio,
+                    numberOfVideos=1,
+                ),
+            )
 
-        # Add reference images from adjacent photos for visual consistency
-        if shot.reference_photo_ids:
-            ref_images = []
-            for pid in shot.reference_photo_ids[:3]:
-                if pid in photo_paths:
-                    ref_data = Path(photo_paths[pid]).read_bytes()
-                    ref_images.append(
-                        types.VideoGenerationReferenceImage(
-                            image=types.Image(
-                                image_bytes=ref_data, mime_type="image/jpeg"
-                            ),
-                        )
+            # ── Poll until generation is complete ─────────────────────────
+            logger.info("Polling for clip %d completion (attempt %d/%d)…", clip.clip_number, attempt, MAX_RETRIES)
+            while not operation.done:
+                await asyncio.sleep(VEO_POLL_INTERVAL)
+                operation = client.operations.get(operation)
+
+            # ── Inspect the completed operation ───────────────────────────
+            if not operation.response:
+                logger.error(
+                    "Clip %d: operation completed but response is None. "
+                    "Operation name=%s, done=%s, error=%s, metadata=%s",
+                    clip.clip_number,
+                    getattr(operation, "name", "?"),
+                    operation.done,
+                    getattr(operation, "error", None),
+                    getattr(operation, "metadata", None),
+                )
+                raise RuntimeError(
+                    f"Veo returned no response for clip {clip.clip_number}. "
+                    f"Operation error: {getattr(operation, 'error', 'none')}"
+                )
+
+            # ── Check for RAI content filtering ───────────────────────────
+            resp = operation.response
+            rai_count = getattr(resp, "rai_media_filtered_count", 0) or 0
+            rai_reasons = getattr(resp, "rai_media_filtered_reasons", None) or []
+
+            if not resp.generated_videos:
+                if rai_count > 0 or rai_reasons:
+                    rai_filtered = True
+                    logger.warning(
+                        "Clip %d: RAI filtered (count=%d, reasons=%s). "
+                        "Will sanitize prompt and retry.",
+                        clip.clip_number, rai_count, rai_reasons,
                     )
-            if ref_images:
-                config_kwargs["referenceImages"] = ref_images
+                    raise RuntimeError(
+                        f"Clip {clip.clip_number} blocked by Veo safety filter: "
+                        f"{'; '.join(rai_reasons)}. Sanitizing prompt and retrying."
+                    )
+                else:
+                    logger.error(
+                        "Clip %d: response exists but generated_videos is empty. "
+                        "Response: %s",
+                        clip.clip_number, resp,
+                    )
+                    raise RuntimeError(
+                        f"Veo returned empty video list for clip {clip.clip_number}."
+                    )
 
-        logger.info("Shot %d → text-to-video (generated)", shot.shot_number)
+            generated_video = resp.generated_videos[0]
 
-        operation = client.models.generate_videos(
-            model=VEO_MODEL,
-            prompt=prompt,
-            config=types.GenerateVideosConfig(**config_kwargs),
-        )
+            # Download video using the SDK's authenticated download method
+            logger.info("Downloading video for clip %d…", clip.clip_number)
+            video_bytes = client.files.download(file=generated_video)
+            output_path.write_bytes(video_bytes)
 
-    # ── Poll until generation is complete ─────────────────────────────────
-    logger.info("Polling for shot %d completion…", shot.shot_number)
-    while not operation.done:
-        await asyncio.sleep(VEO_POLL_INTERVAL)
-        operation = client.operations.get(operation)
+            size = output_path.stat().st_size
+            logger.info("Clip %d saved → %s (%d bytes)", clip.clip_number, output_path, size)
+            return str(output_path)
 
-    if not operation.response or not operation.response.generated_videos:
-        raise RuntimeError(f"Veo returned no video for shot {shot.shot_number}")
+        except Exception as exc:
+            last_error = exc
+            if attempt < MAX_RETRIES:
+                wait = 5 if rai_filtered else 10 * attempt
+                logger.warning(
+                    "Clip %d failed (attempt %d/%d): %s — retrying in %ds…",
+                    clip.clip_number, attempt, MAX_RETRIES, exc, wait,
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.error("Clip %d failed after %d attempts: %s", clip.clip_number, MAX_RETRIES, exc)
 
-    generated_video = operation.response.generated_videos[0]
-
-    # Download video using the SDK's authenticated download method
-    logger.info("Downloading video for shot %d…", shot.shot_number)
-    video_bytes = client.files.download(file=generated_video)
-    output_path.write_bytes(video_bytes)
-
-    size = output_path.stat().st_size
-    logger.info("Shot %d saved → %s (%d bytes)", shot.shot_number, output_path, size)
-    return str(output_path)
+    raise RuntimeError(
+        f"Clip {clip.clip_number} failed after {MAX_RETRIES} attempts: {last_error}"
+    )
 
 
-async def generate_all_shots(
+async def generate_all_clips(
     script: Script,
     photo_paths: dict[int, str],
     job_id: str,
     aspect_ratio: str = "16:9",
     on_progress: callable = None,
 ) -> list[str]:
-    """Generate every shot sequentially (safer for rate limits) and return clip paths."""
+    """Generate every clip sequentially (safer for rate limits) and return clip paths."""
     clip_paths: list[str] = []
-    total = len(script.shots)
+    total = len(script.clips)
 
-    for i, shot in enumerate(script.shots):
-        path = await generate_shot(shot, photo_paths, job_id, aspect_ratio)
+    for i, clip in enumerate(script.clips):
+        path = await generate_clip(clip, photo_paths, job_id, aspect_ratio)
         clip_paths.append(path)
 
         if on_progress:

@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { fetchScript } from "../api/client";
+import { fetchScript, fetchScriptVersion } from "../api/client";
 
-export default function ScriptViewer({ jobId }) {
+export default function ScriptViewer({ jobId, activeVersion }) {
   const [script, setScript] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
-    fetchScript(jobId).then(setScript).catch(() => {});
-  }, [jobId]);
+    const loader = activeVersion
+      ? fetchScriptVersion(jobId, activeVersion)
+      : fetchScript(jobId);
+    loader.then(setScript).catch(() => {});
+  }, [jobId, activeVersion]);
 
   if (!script) return null;
 
@@ -26,7 +29,7 @@ export default function ScriptViewer({ jobId }) {
               AI-Generated Script
             </div>
             <div className="text-sm text-gray-400">
-              "{script.title}" · {script.shots?.length || 0} shots · {script.overall_mood}
+              "{script.title}" · {script.clips?.length || 0} clips · {script.overall_mood}
             </div>
           </div>
         </div>
@@ -49,39 +52,31 @@ export default function ScriptViewer({ jobId }) {
             </div>
           )}
 
-          {/* Shot list */}
+          {/* Clip list */}
           <div className="space-y-3 mt-4">
-            {script.shots?.map((shot, i) => (
+            {script.clips?.map((clip, i) => (
               <div
                 key={i}
-                className={`
-                  p-4 rounded-xl border text-sm
-                  ${shot.shot_type === "photo"
-                    ? "border-blue-500/30 bg-blue-500/5"
-                    : "border-purple-500/30 bg-purple-500/5"
-                  }
-                `}
+                className="p-4 rounded-xl border text-sm border-cyan-500/30 bg-cyan-500/5"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`
-                    px-2 py-0.5 rounded-full text-xs font-medium
-                    ${shot.shot_type === "photo"
-                      ? "bg-blue-500/20 text-blue-300"
-                      : "bg-purple-500/20 text-purple-300"
-                    }
-                  `}>
-                    {shot.shot_type === "photo" ? `📷 Photo #${shot.source_photo_id}` : "🎥 AI Generated"}
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-500/20 text-cyan-300">
+                    🎬 Clip {clip.clip_number} · 📷 Photo #{clip.key_photo_id}
                   </span>
-                  <span className="text-gray-500">{shot.duration_seconds}s</span>
-                  <span className="text-gray-600">→ {shot.transition_to_next}</span>
+                  <span className="text-gray-500">{clip.duration_seconds}s</span>
+                  <span className="text-gray-600">→ {clip.transition_to_next}</span>
                 </div>
 
-                <div className="text-gray-300">
-                  {shot.veo_prompt || shot.camera_direction}
+                {clip.scene_description && (
+                  <div className="text-gray-200 mb-1">{clip.scene_description}</div>
+                )}
+
+                <div className="text-gray-400 text-xs">
+                  <span className="text-gray-500">Veo prompt: </span>{clip.veo_prompt}
                 </div>
 
-                {shot.narration && (
-                  <div className="mt-2 text-gray-400 italic">"{shot.narration}"</div>
+                {clip.narration && (
+                  <div className="mt-2 text-gray-400 italic">"{clip.narration}"</div>
                 )}
               </div>
             ))}

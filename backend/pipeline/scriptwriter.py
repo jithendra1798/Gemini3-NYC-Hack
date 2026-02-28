@@ -28,7 +28,13 @@ async def generate_script(
     client = _get_client()
 
     analysis_json = analysis.model_dump_json(indent=2)
-    prompt = build_script_prompt(analysis_json, theme=theme, duration_target=duration_target)
+    num_photos = len(analysis.photos)
+    prompt = build_script_prompt(
+        analysis_json,
+        theme=theme,
+        duration_target=duration_target,
+        num_photos=num_photos,
+    )
 
     logger.info("Generating cinematic script with %s (theme=%s, target=%ds)…",
                 GEMINI_TEXT_MODEL, theme, duration_target)

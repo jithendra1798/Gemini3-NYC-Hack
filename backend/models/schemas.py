@@ -19,11 +19,6 @@ class Theme(str, Enum):
     AUTO = "auto"
 
 
-class ShotType(str, Enum):
-    PHOTO = "photo"
-    GENERATED = "generated"
-
-
 class Transition(str, Enum):
     CROSSFADE = "crossfade"
     CUT = "cut"
@@ -74,24 +69,28 @@ class AnalysisResult(BaseModel):
 
 # ── Stage 2: Script Models ───────────────────────────────────────────────────
 
-class Shot(BaseModel):
-    shot_number: int
-    shot_type: ShotType
-    source_photo_id: Optional[int] = None
-    veo_prompt: Optional[str] = None
-    duration_seconds: int = 5
-    camera_direction: str = ""
+class Clip(BaseModel):
+    """One video clip = 1 key photo + 1 Veo generation.
+
+    The LLM picks the best photo from the scene to serve as the visual
+    anchor (first frame / reference) and writes a rich Veo prompt that
+    describes the cinematic motion starting from that photo.
+    """
+    clip_number: int
+    key_photo_id: int                       # which uploaded photo anchors this clip
+    veo_prompt: str                         # detailed Veo prompt (camera, motion, mood, audio)
+    duration_seconds: int = 8               # target duration
     transition_to_next: Transition = Transition.CROSSFADE
     audio_mood: str = ""
-    narration: Optional[str] = None
-    reference_photo_ids: list[int] = Field(default_factory=list)
+    narration: Optional[str] = None         # optional voice-over / text overlay
+    scene_description: str = ""             # human-readable description for ScriptViewer
 
 
 class Script(BaseModel):
     title: str = ""
     overall_mood: str = ""
     music_direction: str = ""
-    shots: list[Shot] = Field(default_factory=list)
+    clips: list[Clip] = Field(default_factory=list)
 
 
 # ── Pipeline Progress ────────────────────────────────────────────────────────

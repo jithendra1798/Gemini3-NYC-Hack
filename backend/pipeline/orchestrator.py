@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 from ..config import SCRIPTS_DIR, UPLOAD_DIR
+from ..datastore import (
+    create_project,
+    create_version,
+    get_project,
+    next_version_number,
+    update_version,
+)
 from ..models.schemas import (
     AnalysisResult,
     PipelineStage,
@@ -19,11 +26,11 @@ from ..models.schemas import (
 from .analyzer import analyze_photos
 from .assembler import assemble_video
 from .scriptwriter import generate_script
-from .videogen import generate_all_shots
+from .videogen import generate_all_clips
 
 logger = logging.getLogger(__name__)
 
-# In-memory job store (good enough for hackathon)
+# In-memory job store (good enough for hackathon — tracks live progress)
 _jobs: dict[str, dict] = {}
 
 
@@ -37,6 +44,7 @@ def create_job() -> str:
         "script": None,
         "analysis": None,
         "clip_paths": [],
+        "version": None,
     }
     return job_id
 
@@ -56,10 +64,25 @@ async def run_pipeline(
     theme: str = "auto",
     duration_target: int = 30,
     aspect_ratio: str = "16:9",
+    version: int | None = None,
 ) -> AsyncGenerator[ProgressUpdate, None]:
-    """Run the full CineSnap pipeline, yielding progress updates as SSE events."""
+    """Run the full CineSnap pipeline, yielding progress updates as SSE events.
+
+    If *version* is None a new project is created in the datastore; otherwise
+    the existing project is re-used and a new version is appended.
+    """
 
     try:
+        # ── Register in datastore ─────────────────────────────────────────
+        if version is None:
+            create_project(job_id, photo_paths, theme, duration_target, aspect_ratio)
+            version = 1
+        ver = create_version(job_id, version, theme=theme)
+        _update(job_id, version=version)
+
+        # Versioned IDs for file names  (e.g. abc123_v2)
+        vid = f"{job_id}_v{version}"
+
         # ── Stage 1: Analyze ──────────────────────────────────────────────
         update = ProgressUpdate(
             stage=PipelineStage.ANALYZING,
@@ -71,6 +94,7 @@ async def run_pipeline(
 
         analysis: AnalysisResult = await analyze_photos(photo_paths)
         _update(job_id, analysis=analysis)
+        update_version(job_id, version, analysis=analysis)
         logger.info("Analysis complete: %d photos, %d scenes", len(analysis.photos), len(analysis.scenes))
 
         # ── Stage 2: Script ───────────────────────────────────────────────
@@ -84,17 +108,18 @@ async def run_pipeline(
 
         script: Script = await generate_script(analysis, theme=theme, duration_target=duration_target)
         _update(job_id, script=script)
+        update_version(job_id, version, script=script)
 
         # Persist script to disk
-        script_path = SCRIPTS_DIR / f"{job_id}.json"
+        script_path = SCRIPTS_DIR / f"{vid}.json"
         script_path.write_text(script.model_dump_json(indent=2))
-        logger.info("Script complete: '%s' — %d shots", script.title, len(script.shots))
+        logger.info("Script complete: '%s' — %d clips", script.title, len(script.clips))
 
         # ── Stage 3: Video Generation ─────────────────────────────────────
         update = ProgressUpdate(
             stage=PipelineStage.GENERATING,
             progress=0.35,
-            message=f"Generating shot 1 of {len(script.shots)} with Veo 3.1…",
+            message=f"Generating clip 1 of {len(script.clips)} with Veo 3.1…",
         )
         _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
         yield update
@@ -102,22 +127,23 @@ async def run_pipeline(
         # Build photo id → path map
         photo_map = {i: p for i, p in enumerate(photo_paths)}
 
-        async def on_shot_progress(done: int, total: int):
+        async def on_clip_progress(done: int, total: int):
             nonlocal update
             pct = 0.35 + 0.45 * (done / total)
             update = ProgressUpdate(
                 stage=PipelineStage.GENERATING,
                 progress=round(pct, 2),
-                message=f"Generating shot {done} of {total} with Veo 3.1…",
+                message=f"Generating clip {done} of {total} with Veo 3.1…",
             )
             _update(job_id, progress=update.progress, message=update.message)
 
-        clip_paths = await generate_all_shots(
-            script, photo_map, job_id,
+        clip_paths = await generate_all_clips(
+            script, photo_map, vid,
             aspect_ratio=aspect_ratio,
-            on_progress=on_shot_progress,
+            on_progress=on_clip_progress,
         )
         _update(job_id, clip_paths=clip_paths)
+        update_version(job_id, version, clip_paths=clip_paths)
 
         # yield the latest generation progress
         yield update
@@ -131,8 +157,8 @@ async def run_pipeline(
         _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
         yield update
 
-        final_path = await asyncio.to_thread(assemble_video, clip_paths, script, job_id)
-        video_url = f"/api/videos/{job_id}.mp4"
+        final_path = await asyncio.to_thread(assemble_video, clip_paths, script, vid)
+        video_url = f"/api/videos/{vid}.mp4"
 
         # ── Done ──────────────────────────────────────────────────────────
         update = ProgressUpdate(
@@ -149,6 +175,12 @@ async def run_pipeline(
             message=update.message,
             video_url=video_url,
         )
+        update_version(
+            job_id, version,
+            status="complete",
+            final_video=str(final_path),
+            video_url=video_url,
+        )
         yield update
 
     except Exception as exc:
@@ -159,4 +191,9 @@ async def run_pipeline(
             message=f"Error: {exc}",
         )
         _update(job_id, stage=update.stage, message=update.message)
+        if version is not None:
+            try:
+                update_version(job_id, version, status="error", error=str(exc))
+            except Exception:
+                pass
         yield update

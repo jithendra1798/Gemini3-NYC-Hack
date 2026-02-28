@@ -15,6 +15,13 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import FINAL_DIR, SCRIPTS_DIR, UPLOAD_DIR
+from .datastore import (
+    get_all_versions,
+    get_project,
+    get_version,
+    list_projects,
+    next_version_number,
+)
 from .models.schemas import GenerateRequest, PipelineStage, Theme
 from .pipeline.orchestrator import create_job, get_job, run_pipeline
 
@@ -139,12 +146,161 @@ async def get_script(job_id: str):
     """Return the AI-generated cinematic script for a job."""
     path = SCRIPTS_DIR / f"{job_id}.json"
     if not path.exists():
+        # Try versioned file name (latest version)
+        proj = get_project(job_id)
+        if proj and proj["versions"]:
+            latest_v = proj["versions"][-1]["version"]
+            versioned_path = SCRIPTS_DIR / f"{job_id}_v{latest_v}.json"
+            if versioned_path.exists():
+                return json.loads(versioned_path.read_text())
         # Try from memory
         job = get_job(job_id)
         if job and job.get("script"):
             return job["script"].model_dump()
         raise HTTPException(status_code=404, detail="Script not found")
     return json.loads(path.read_text())
+
+
+@app.get("/api/scripts/{job_id}/{version}")
+async def get_script_version(job_id: str, version: int):
+    """Return the script for a specific version."""
+    path = SCRIPTS_DIR / f"{job_id}_v{version}.json"
+    if not path.exists():
+        ver = get_version(job_id, version)
+        if ver and ver.get("script"):
+            return ver["script"]
+        raise HTTPException(status_code=404, detail="Script not found")
+    return json.loads(path.read_text())
+
+
+# ── Projects & Versions ──────────────────────────────────────────────────────
+
+@app.get("/api/projects")
+async def list_all_projects():
+    """List all CineSnap projects with summary info."""
+    return list_projects()
+
+
+@app.get("/api/projects/{job_id}")
+async def get_project_detail(job_id: str):
+    """Get full project details including all versions."""
+    proj = get_project(job_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return proj
+
+
+@app.get("/api/projects/{job_id}/versions")
+async def get_project_versions(job_id: str):
+    """List all versions for a project."""
+    versions = get_all_versions(job_id)
+    if not versions:
+        raise HTTPException(status_code=404, detail="Project not found or has no versions")
+    return versions
+
+
+@app.get("/api/projects/{job_id}/versions/{version}")
+async def get_project_version(job_id: str, version: int):
+    """Get a specific version of a project."""
+    ver = get_version(job_id, version)
+    if not ver:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return ver
+
+
+@app.post("/api/projects/{job_id}/regenerate")
+async def regenerate(
+    job_id: str,
+    theme: str = Form("auto"),
+    duration_target: int = Form(30),
+    aspect_ratio: str = Form("16:9"),
+):
+    """Regenerate video from existing photos — creates a new version.
+
+    Returns an SSE stream of progress updates, just like /api/generate.
+    """
+    proj = get_project(job_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    photo_paths = proj["photo_paths"]
+    if not photo_paths:
+        raise HTTPException(status_code=400, detail="No photos found for this project")
+
+    # Validate theme
+    try:
+        theme_enum = Theme(theme)
+    except ValueError:
+        theme_enum = Theme.AUTO
+
+    # Determine next version number
+    version = next_version_number(job_id)
+
+    # Re-use the same job_id in the in-memory store for progress tracking
+    from .pipeline.orchestrator import _jobs, _update
+    _jobs[job_id] = {
+        "stage": PipelineStage.UPLOADING,
+        "progress": 0.0,
+        "message": "Starting regeneration…",
+        "video_url": None,
+        "script": None,
+        "analysis": None,
+        "clip_paths": [],
+        "version": version,
+    }
+
+    logger.info("Regenerating job %s → version %d (theme=%s)", job_id, version, theme_enum.value)
+
+    async def event_stream():
+        async for update in run_pipeline(
+            job_id=job_id,
+            photo_paths=photo_paths,
+            theme=theme_enum.value,
+            duration_target=duration_target,
+            aspect_ratio=aspect_ratio,
+            version=version,
+        ):
+            data = update.model_dump_json()
+            yield f"data: {data}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Job-Id": job_id,
+            "X-Version": str(version),
+        },
+    )
+
+
+@app.get("/api/projects/{job_id}/photos")
+async def get_project_photos(job_id: str):
+    """Return metadata for the uploaded photos of a project."""
+    proj = get_project(job_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    photos = []
+    for i, p in enumerate(proj["photo_paths"]):
+        path = Path(p)
+        photos.append({
+            "id": i,
+            "filename": path.name,
+            "url": f"/api/uploads/{job_id}/{path.name}",
+        })
+    return photos
+
+
+@app.get("/api/uploads/{job_id}/{filename}")
+async def get_upload(job_id: str, filename: str):
+    """Serve an uploaded photo."""
+    path = UPLOAD_DIR / job_id / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Photo not found")
+    suffix = path.suffix.lower()
+    mime = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(suffix, "image/jpeg")
+    return FileResponse(path, media_type=mime)
 
 
 # ── Serve frontend static files in production ─────────────────────────────────
