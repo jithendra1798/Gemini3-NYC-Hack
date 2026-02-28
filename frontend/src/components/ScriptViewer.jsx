@@ -15,7 +15,8 @@ export default function ScriptViewer({ jobId, activeVersion }) {
 
   if (!script) return null;
 
-  const clip = script.clip;
+  // Support both single-clip (mock) and multi-clip (real API) formats
+  const clips = script.clips || (script.clip ? [script.clip] : []);
 
   return (
     <div className="w-full border border-white/10 rounded bg-black overflow-hidden script-panel animate-fade-in">
@@ -31,7 +32,7 @@ export default function ScriptViewer({ jobId, activeVersion }) {
             "{script.title}"
           </span>
           <span className="text-[9px] font-mono text-white/25">
-            {script.overall_mood}
+            {clips.length} clip{clips.length !== 1 ? "s" : ""} · {script.overall_mood}
           </span>
         </div>
         <span className={`text-[10px] font-mono text-white/30 transition-transform duration-200 ${expanded ? "rotate-180 inline-block" : ""}`}>
@@ -58,11 +59,13 @@ export default function ScriptViewer({ jobId, activeVersion }) {
             </div>
           )}
 
-          {/* Single clip details */}
-          {clip && (
-            <div className="grid grid-cols-[32px_60px_1fr] gap-3 py-2.5 border-t border-white/5">
+          {/* Clip details */}
+          {clips.map((clip, idx) => (
+            <div key={idx} className="grid grid-cols-[32px_60px_1fr] gap-3 py-2.5 border-t border-white/5">
               {/* Shot number */}
-              <span className="text-[9px] text-white/25 tabular-nums pt-0.5">01</span>
+              <span className="text-[9px] text-white/25 tabular-nums pt-0.5">
+                {String(idx + 1).padStart(2, "0")}
+              </span>
 
               {/* Type badge */}
               <span className="text-[8px] tracking-widest uppercase self-start mt-0.5 px-1.5 py-0.5 rounded-sm border border-white/20 text-white/50">
@@ -80,6 +83,9 @@ export default function ScriptViewer({ jobId, activeVersion }) {
                   {clip.transition_to_next && (
                     <span>→ {clip.transition_to_next}</span>
                   )}
+                  {clip.audio_mood && (
+                    <span>♩ {clip.audio_mood}</span>
+                  )}
                 </div>
                 {clip.scene_description && (
                   <div className="text-[10px] text-white/35 pt-0.5">
@@ -93,7 +99,7 @@ export default function ScriptViewer({ jobId, activeVersion }) {
                 )}
               </div>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>

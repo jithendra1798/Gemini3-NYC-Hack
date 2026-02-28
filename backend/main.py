@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
@@ -13,6 +14,7 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .config import FINAL_DIR, SCRIPTS_DIR, UPLOAD_DIR
 from .datastore import (
@@ -21,6 +23,8 @@ from .datastore import (
     get_version,
     list_projects,
     next_version_number,
+    find_duplicate_project,
+    store_photo_fingerprint,
 )
 from .models.schemas import GenerateRequest, PipelineStage, Theme
 from .pipeline.orchestrator import create_job, get_job, run_pipeline
@@ -53,6 +57,39 @@ app.add_middleware(
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "CineSnap"}
+
+
+# ── Duplicate detection ───────────────────────────────────────────────────────
+
+class FileMeta(BaseModel):
+    name: str
+    size: int
+    lastModified: int | float = 0
+
+class DuplicateCheckRequest(BaseModel):
+    files: list[FileMeta]
+
+
+@app.post("/api/check-duplicate")
+async def check_duplicate(req: DuplicateCheckRequest):
+    """Check if an identical set of photos was already uploaded.
+
+    Compares a fingerprint derived from the sorted file names + sizes.
+    Returns { duplicate: true, job_id: "..." } if found.
+    """
+    fingerprint = _compute_fingerprint(req.files)
+    match_id = find_duplicate_project(fingerprint)
+    if match_id:
+        logger.info("Duplicate detected for fingerprint %s → project %s", fingerprint[:12], match_id)
+        return {"duplicate": True, "job_id": match_id}
+    return {"duplicate": False}
+
+
+def _compute_fingerprint(files: list[FileMeta]) -> str:
+    """Produce a stable hash from sorted file name+size pairs."""
+    parts = sorted(f"{f.name}:{f.size}" for f in files)
+    raw = "|".join(parts)
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 @app.post("/api/generate")
@@ -101,6 +138,14 @@ async def generate(
             dest = job_dir / filename
             await asyncio.to_thread(dest.write_bytes, data)
             photo_paths.append(str(dest))
+
+        # ── 3. Store fingerprint for duplicate detection ──────────────────────
+        file_metas = [
+            FileMeta(name=photo.filename or f"photo_{i}.jpg", size=len(data))
+            for i, (_, data) in enumerate(raw_files)
+        ]
+        fingerprint = _compute_fingerprint(file_metas)
+        store_photo_fingerprint(job_id, fingerprint)
 
         logger.info("Job %s: saved %d photos to %s", job_id, len(photo_paths), job_dir)
 
