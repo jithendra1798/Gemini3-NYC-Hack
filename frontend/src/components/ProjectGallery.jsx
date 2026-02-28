@@ -1,37 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { fetchProjects, fetchPhotos } from "../api/client";
+import { fetchProjects, deleteProject } from "../api/client";
 
 const API_BASE = process.env.REACT_APP_API_URL || "";
 
-export default function ProjectGallery({ onSelectProject, onClose }) {
+export default function ProjectGallery({ onSelectProject, onClose, onProjectDeleted }) {
   const [projects, setProjects] = useState([]);
-  const [thumbnails, setThumbnails] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     fetchProjects()
-      .then(async (projs) => {
-        setProjects(projs);
-        // Load first thumbnail for each project
-        const thumbMap = {};
-        await Promise.all(
-          projs.map(async (p) => {
-            try {
-              const photos = await fetchPhotos(p.job_id);
-              if (photos.length > 0) {
-                thumbMap[p.job_id] = {
-                  url: `${API_BASE}${photos[0].url}`,
-                  count: photos.length,
-                };
-              }
-            } catch {
-              // skip
-            }
-          })
-        );
-        setThumbnails(thumbMap);
-      })
+      .then((projs) => setProjects(projs))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -80,7 +59,7 @@ export default function ProjectGallery({ onSelectProject, onClose }) {
       {/* Project cards */}
       <div className="space-y-2">
         {projects.map((proj) => {
-          const thumb = thumbnails[proj.job_id];
+          const thumbUrl = proj.first_photo_url ? `${API_BASE}${proj.first_photo_url}` : null;
           const date = new Date(proj.created_at);
           const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
           const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -98,9 +77,9 @@ export default function ProjectGallery({ onSelectProject, onClose }) {
             >
               {/* Thumbnail */}
               <div className="w-24 h-24 flex-shrink-0 bg-white/5 overflow-hidden">
-                {thumb ? (
+                {thumbUrl ? (
                   <img
-                    src={thumb.url}
+                    src={thumbUrl}
                     alt=""
                     className="w-full h-full object-cover opacity-60 group-hover:opacity-90 transition-opacity duration-300"
                   />
@@ -144,11 +123,27 @@ export default function ProjectGallery({ onSelectProject, onClose }) {
                 </div>
               </div>
 
-              {/* Arrow */}
-              <div className="flex items-center px-4 flex-shrink-0">
+              {/* Arrow + Delete */}
+              <div className="flex flex-col items-center justify-center gap-2 px-3 flex-shrink-0">
                 <span className="text-[10px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
                   →
                 </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!window.confirm("Delete this project and all its versions?")) return;
+                    deleteProject(proj.job_id)
+                      .then(() => {
+                        setProjects((prev) => prev.filter((p) => p.job_id !== proj.job_id));
+                        onProjectDeleted?.();
+                      })
+                      .catch(() => {});
+                  }}
+                  className="text-[9px] font-mono text-white/10 hover:text-white/50 tracking-widest transition-colors opacity-0 group-hover:opacity-100"
+                  title="Delete project"
+                >
+                  ✕
+                </button>
               </div>
             </button>
           );

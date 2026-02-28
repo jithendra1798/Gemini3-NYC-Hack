@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import Callable, Optional
 
 from google import genai
 from google.genai import types
@@ -157,7 +158,7 @@ async def generate_all_clips(
     photo_paths: dict[int, str],
     job_id: str,
     aspect_ratio: str = "16:9",
-    on_progress: callable = None,
+    on_progress: Optional[Callable] = None,
 ) -> list[str]:
     """Generate every clip sequentially (safer for rate limits) and return clip paths."""
     clip_paths: list[str] = []

@@ -99,6 +99,7 @@ export default function VersionHistory({ jobId, currentVideoUrl, onSelectVersion
                     </div>
                     <div className="text-[9px] font-mono text-white/20 tracking-widest">
                       {dateStr} · {timeStr}
+                      {ver.num_clips > 0 && <> · {ver.num_clips} clip{ver.num_clips !== 1 ? "s" : ""}</>}
                     </div>
                   </div>
                 </div>

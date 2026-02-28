@@ -18,11 +18,12 @@ from ..models.schemas import (
     AnalysisResult,
     PipelineStage,
     ProgressUpdate,
-    SingleClipScript,
+    Script,
 )
 from .analyzer import analyze_photos
+from .assembler import assemble_video
 from .scriptwriter import generate_script
-from .videogen import generate_clip
+from .videogen import generate_all_clips
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ async def run_pipeline(
     aspect_ratio: str = "16:9",
     version: int | None = None,
 ) -> AsyncGenerator[ProgressUpdate, None]:
-    """Run the CineSnap pipeline: analyze → script → one Veo clip → done.
+    """Run the full CineSnap pipeline: analyze → script → generate ALL clips → assemble → done.
 
     Yields SSE progress updates at each stage.
     """
@@ -76,12 +77,13 @@ async def run_pipeline(
         _update(job_id, version=version)
 
         vid = f"{job_id}_v{version}"
+        num_photos = len(photo_paths)
 
         # ── Stage 1: Analyze ──────────────────────────────────────────────
         update = ProgressUpdate(
             stage=PipelineStage.ANALYZING,
-            progress=0.10,
-            message=f"Analyzing {len(photo_paths)} photos with Gemini Vision…",
+            progress=0.05,
+            message=f"Analyzing {num_photos} photos with Gemini Vision…",
         )
         _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
         yield update
@@ -93,7 +95,7 @@ async def run_pipeline(
 
         update = ProgressUpdate(
             stage=PipelineStage.ANALYZING,
-            progress=0.25,
+            progress=0.15,
             message=f"Found {len(analysis.scenes)} scene(s) — {analysis.suggested_narrative_arc[:80]}…",
         )
         _update(job_id, progress=update.progress, message=update.message)
@@ -102,13 +104,13 @@ async def run_pipeline(
         # ── Stage 2: Script ───────────────────────────────────────────────
         update = ProgressUpdate(
             stage=PipelineStage.SCRIPTING,
-            progress=0.35,
-            message="Writing cinematic script…",
+            progress=0.20,
+            message=f"Writing cinematic script for {num_photos} clips…",
         )
         _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
         yield update
 
-        script: SingleClipScript = await generate_script(
+        script: Script = await generate_script(
             analysis, theme=theme, duration_target=duration_target
         )
         _update(job_id, script=script)
@@ -117,54 +119,103 @@ async def run_pipeline(
         # Persist script to disk
         script_path = SCRIPTS_DIR / f"{vid}.json"
         script_path.write_text(script.model_dump_json(indent=2))
-        logger.info("Script complete: '%s' — key photo %d", script.title, script.clip.key_photo_id)
+        logger.info("Script complete: '%s' — %d clips", script.title, len(script.clips))
 
         update = ProgressUpdate(
             stage=PipelineStage.SCRIPTING,
-            progress=0.50,
-            message=f"Script ready: \"{script.title}\" — key frame selected (photo {script.clip.key_photo_id})",
+            progress=0.30,
+            message=f"Script ready: \"{script.title}\" — {len(script.clips)} clips planned",
         )
         _update(job_id, progress=update.progress, message=update.message)
         yield update
 
-        # ── Stage 3: Generate ONE clip ────────────────────────────────────
+        # ── Stage 3: Generate ALL clips ───────────────────────────────────
+        total_clips = len(script.clips)
         update = ProgressUpdate(
             stage=PipelineStage.GENERATING,
-            progress=0.55,
-            message=f"Generating preview clip with Veo 3.1 (photo {script.clip.key_photo_id})…",
+            progress=0.35,
+            message=f"Generating {total_clips} video clips with Veo 3.1…",
         )
         _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
         yield update
 
         photo_map = {i: p for i, p in enumerate(photo_paths)}
-        clip_path = await generate_clip(
-            script.clip,
-            photo_map,
-            vid,
+
+        # Progress callback — update after each clip finishes
+        async def on_clip_progress(completed: int, total: int):
+            frac = completed / total
+            # Scale progress: clip generation spans 0.35 → 0.80
+            pct = 0.35 + frac * 0.45
+            msg = f"Clip {completed}/{total} generated"
+            if completed < total:
+                msg += f" — rendering clip {completed + 1}…"
+            up = ProgressUpdate(
+                stage=PipelineStage.GENERATING,
+                progress=round(pct, 2),
+                message=msg,
+            )
+            _update(job_id, progress=up.progress, message=up.message)
+            # We can't yield from a callback, but we send via a side-channel
+            nonlocal _pending_updates
+            _pending_updates.append(up)
+
+        _pending_updates: list[ProgressUpdate] = []
+
+        clip_paths = await generate_all_clips(
+            script=script,
+            photo_paths=photo_map,
+            job_id=vid,
             aspect_ratio=aspect_ratio,
+            on_progress=on_clip_progress,
         )
-        _update(job_id, clip_paths=[clip_path])
-        update_version(job_id, version, clip_paths=[clip_path])
+
+        # Flush any pending progress updates
+        for pending in _pending_updates:
+            yield pending
+        _pending_updates.clear()
+
+        _update(job_id, clip_paths=clip_paths)
+        update_version(job_id, version, clip_paths=clip_paths)
 
         update = ProgressUpdate(
             stage=PipelineStage.GENERATING,
-            progress=0.90,
-            message="Clip generated — finalising…",
+            progress=0.80,
+            message=f"All {total_clips} clips generated!",
         )
         _update(job_id, progress=update.progress, message=update.message)
         yield update
 
-        # ── Done — the clip IS the final video (no assembly needed) ──────
-        # Move/copy clip to final dir so it's served at /api/videos/
-        final_path = FINAL_DIR / f"{vid}.mp4"
-        import shutil
-        shutil.copy2(clip_path, final_path)
+        # ── Stage 4: Assemble ─────────────────────────────────────────────
+        update = ProgressUpdate(
+            stage=PipelineStage.ASSEMBLING,
+            progress=0.85,
+            message=f"Assembling {total_clips} clips with cinematic transitions…",
+        )
+        _update(job_id, stage=update.stage, progress=update.progress, message=update.message)
+        yield update
+
+        final_path_str = assemble_video(
+            clip_paths=clip_paths,
+            script=script,
+            job_id=vid,
+        )
+        final_path = Path(final_path_str)
+
+        update = ProgressUpdate(
+            stage=PipelineStage.ASSEMBLING,
+            progress=0.95,
+            message="Final film encoded — preparing for playback…",
+        )
+        _update(job_id, progress=update.progress, message=update.message)
+        yield update
+
+        # ── Done ──────────────────────────────────────────────────────────
         video_url = f"/api/videos/{vid}.mp4"
 
         update = ProgressUpdate(
             stage=PipelineStage.COMPLETE,
             progress=1.0,
-            message="Your cinematic preview is ready!",
+            message="Your cinematic film is ready!",
             video_url=video_url,
             script_id=job_id,
         )

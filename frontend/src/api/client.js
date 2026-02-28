@@ -10,24 +10,31 @@ const MOCK = process.env.REACT_APP_MOCK === "true";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function generateVideoMock(photos, _opts, onProgress) {
+  const n = photos.length;
   const steps = [
-    { stage: "analyzing",  progress: 0.10, message: `Analyzing ${photos.length} photos with Gemini Vision…` },
-    { stage: "analyzing",  progress: 0.25, message: `Found 2 scenes — a story of light and motion across ${photos.length} moments…` },
-    { stage: "scripting",  progress: 0.35, message: "Writing cinematic script…" },
-    { stage: "scripting",  progress: 0.50, message: "Script ready: \"Golden Hour\" — key frame selected (photo 0)" },
-    { stage: "generating", progress: 0.55, message: "Generating preview clip with Veo 3.1 (photo 0)…" },
-    { stage: "generating", progress: 0.90, message: "Clip generated — finalising…" },
+    { stage: "analyzing",  progress: 0.05, message: `Analyzing ${n} photos with Gemini Vision…` },
+    { stage: "analyzing",  progress: 0.15, message: `Found 2 scenes — a story of light and motion across ${n} moments…` },
+    { stage: "scripting",  progress: 0.20, message: `Writing cinematic script for ${n} clips…` },
+    { stage: "scripting",  progress: 0.30, message: `Script ready: "Golden Hour" — ${n} clips planned` },
+    { stage: "generating", progress: 0.35, message: `Generating ${n} video clips with Veo 3.1…` },
+    ...Array.from({ length: n }, (_, i) => ({
+      stage: "generating",
+      progress: 0.35 + ((i + 1) / n) * 0.45,
+      message: `Clip ${i + 1}/${n} generated${i + 1 < n ? ` — rendering clip ${i + 2}…` : ""}`,
+    })),
+    { stage: "assembling", progress: 0.85, message: `Assembling ${n} clips with cinematic transitions…` },
+    { stage: "assembling", progress: 0.95, message: "Final film encoded — preparing for playback…" },
     {
       stage: "complete",
       progress: 1.0,
-      message: "Your cinematic preview is ready!",
+      message: "Your cinematic film is ready!",
       video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       script_id: "mock-job-001",
     },
   ];
 
   for (const step of steps) {
-    await sleep(900);
+    await sleep(700);
     onProgress?.(step);
     if (step.stage === "complete") return step;
   }
@@ -104,18 +111,30 @@ export async function fetchScript(jobId) {
     return {
       title: "Golden Hour",
       overall_mood: "contemplative",
-      music_direction: "Ambient electronic with soft piano undertones, building gently to a warm resolution",
+      music_direction: "Opens with solo piano in minor key, ambient pads join at midpoint, builds to warm orchestral swell with strings, resolves with piano alone.",
       narrative_summary: "A quiet journey through light and stillness — the photos capture fleeting moments of everyday life rendered extraordinary by golden afternoon light. The figures move unhurried through their world, each frame a breath held just long enough to notice beauty.",
-      clip: {
-        clip_number: 1,
-        key_photo_id: 0,
-        veo_prompt: "Camera slowly pulls back from the subject revealing the warm cityscape behind them, golden hour light sweeping across rooftops as a gentle breeze stirs the scene. Shallow depth of field, film grain, anamorphic lens flare.",
-        duration_seconds: 8,
-        transition_to_next: "fade",
-        audio_mood: "warm ambient with distant city hum",
-        narration: "Where the light falls, stories begin.",
-        scene_description: "The most visually compelling frame — chosen as the emotional anchor for the whole narrative.",
-      },
+      clips: [
+        {
+          clip_number: 1,
+          key_photo_id: 0,
+          veo_prompt: "Camera slowly pulls back from the subject revealing the warm cityscape behind them, golden hour light sweeping across rooftops. Gentle echo of distant traffic.",
+          duration_seconds: 8,
+          transition_to_next: "crossfade",
+          audio_mood: "warm ambient with distant city hum",
+          narration: "Where the light falls, stories begin.",
+          scene_description: "Opening frame — the emotional anchor for the whole narrative.",
+        },
+        {
+          clip_number: 2,
+          key_photo_id: 1,
+          veo_prompt: "Camera dollies forward through sunlit corridor as dust motes dance in warm beams. Soft footsteps echo.",
+          duration_seconds: 8,
+          transition_to_next: "fade",
+          audio_mood: "quiet interior with gentle reverb",
+          narration: "The light remembers.",
+          scene_description: "Interior transition — moving deeper into the story.",
+        },
+      ],
     };
   }
   const res = await fetch(`${API_BASE}/api/scripts/${jobId}`);
@@ -241,5 +260,14 @@ export async function checkDuplicate(photos) {
     body: JSON.stringify({ files: meta }),
   });
   if (!res.ok) return { duplicate: false };
+  return res.json();
+}
+
+/**
+ * Delete a project and its files.
+ */
+export async function deleteProject(jobId) {
+  const res = await fetch(`${API_BASE}/api/projects/${jobId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete project");
   return res.json();
 }

@@ -30,12 +30,14 @@ module.exports = {
         "shimmer":            "shimmer 2s linear infinite",
         "pulse-slow":         "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "fade-in":            "fadeIn 0.4s ease-out",
+        "fade-out":           "fadeOut 0.35s cubic-bezier(0.4, 0, 1, 1) forwards",
         "scan":               "scan 3s linear infinite",
         "shutter-drop":       "shutterDrop 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "curtain-lift":       "curtainLift 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both",
         "film-burn":          "filmBurn 0.9s ease-out forwards",
         "border-pulse-once":  "borderPulseOnce 0.8s ease-out forwards",
         "bar-flash":          "barFlash 0.6s ease-out forwards",
+        "float-up":           "floatUp 12s linear infinite",
       },
       keyframes: {
         carouselSpin: {
@@ -49,6 +51,10 @@ module.exports = {
         fadeIn: {
           "0%":   { opacity: 0, transform: "translateY(8px)" },
           "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        fadeOut: {
+          "0%":   { opacity: "1", transform: "translateY(0) scale(1)" },
+          "100%": { opacity: "0", transform: "translateY(-20px) scale(0.97)" },
         },
         scan: {
           "0%":   { top: "0%" },
@@ -79,6 +85,12 @@ module.exports = {
           "0%":   { filter: "brightness(1)" },
           "40%":  { filter: "brightness(2.5)" },
           "100%": { filter: "brightness(1)" },
+        },
+        floatUp: {
+          "0%":   { transform: "translateY(0) scale(1)", opacity: "0" },
+          "10%":  { opacity: "0.6" },
+          "90%":  { opacity: "0.6" },
+          "100%": { transform: "translateY(-100vh) scale(0.5)", opacity: "0" },
         },
       },
     },

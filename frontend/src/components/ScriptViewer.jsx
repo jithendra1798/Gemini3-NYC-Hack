@@ -24,7 +24,7 @@ export default function ScriptViewer({ jobId, activeVersion }) {
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/3 transition-colors text-left"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] transition-colors text-left"
       >
         <div className="flex items-center gap-3">
           <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Script</span>

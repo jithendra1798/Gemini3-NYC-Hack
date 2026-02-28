@@ -44,7 +44,7 @@ DEFAULT_ASPECT_RATIO: str = os.getenv("DEFAULT_ASPECT_RATIO", "16:9")
 DEFAULT_DURATION_TARGET: int = int(os.getenv("DEFAULT_DURATION_TARGET", "30"))
 MAX_PHOTOS: int = int(os.getenv("MAX_PHOTOS", "10"))
 VEO_POLL_INTERVAL: int = int(os.getenv("VEO_POLL_INTERVAL", "10"))
-CROSSFADE_DURATION: float = float(os.getenv("CROSSFADE_DURATION", "0.5"))
+CROSSFADE_DURATION: float = float(os.getenv("CROSSFADE_DURATION", "0.8"))
 
 # ── Server ────────────────────────────────────────────────────────────────────
 HOST: str = os.getenv("HOST", "0.0.0.0")

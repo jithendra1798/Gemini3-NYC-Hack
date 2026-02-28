@@ -6,7 +6,9 @@ import VideoPlayer from "./components/VideoPlayer";
 import ScriptViewer from "./components/ScriptViewer";
 import VersionHistory from "./components/VersionHistory";
 import ProjectGallery from "./components/ProjectGallery";
-import { generateVideo, regenerateVideo, checkDuplicate, fetchProjects } from "./api/client";
+import { generateVideo, regenerateVideo, checkDuplicate, fetchProjects, fetchPhotos } from "./api/client";
+
+const API_BASE = process.env.REACT_APP_API_URL || "";
 
 export default function App() {
   const [photos, setPhotos] = useState([]);
@@ -20,18 +22,33 @@ export default function App() {
   const [error, setError] = useState(null);
   const [showGallery, setShowGallery] = useState(false);
   const [projectCount, setProjectCount] = useState(0);
+  // Photo URLs for ProgressTracker when loading from gallery (no File objects)
+  const [projectPhotoUrls, setProjectPhotoUrls] = useState([]);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Load project count on mount
   React.useEffect(() => {
     fetchProjects().then((p) => setProjectCount(p.length)).catch(() => {});
   }, [finalVideoUrl]); // refresh after new generations too
 
+  // Helper: photos available for ProgressTracker preview
+  // (real File objects during upload, or photo URL objects from gallery projects)
+  const progressPhotos = photos.length > 0 ? photos : projectPhotoUrls;
+
   const handleGenerate = async () => {
     if (photos.length === 0) return;
+
+    // ── Phase 1: fade-out the upload view ──
+    setIsTransitioning(true);
+    await new Promise((r) => setTimeout(r, 400)); // wait for exit animation
+
+    // ── Phase 2: switch to processing view ──
+    setIsTransitioning(false);
     setIsProcessing(true);
     setProgress(null);
     setFinalVideoUrl(null);
     setJobId(null);
+    setActiveVersion(null);
     setError(null);
 
     try {
@@ -51,6 +68,11 @@ export default function App() {
           }
         );
         if (result?.stage === "error") setError(result.message);
+        else if (result?.video_url) {
+          // Extract version from URL: ..._v2.mp4 → 2
+          const vMatch = result.video_url.match(/_v(\d+)\.mp4/);
+          if (vMatch) setActiveVersion(parseInt(vMatch[1], 10));
+        }
         return;
       }
 
@@ -64,6 +86,10 @@ export default function App() {
         }
       );
       if (result?.stage === "error") setError(result.message);
+      else if (result?.video_url) {
+        const vMatch = result.video_url.match(/_v(\d+)\.mp4/);
+        if (vMatch) setActiveVersion(parseInt(vMatch[1], 10));
+      }
     } catch (err) {
       setError(err.message);
       setProgress({ stage: "error", progress: 0, message: err.message });
@@ -83,6 +109,8 @@ export default function App() {
     setActiveVersion(null);
     setError(null);
     setShowGallery(false);
+    setProjectPhotoUrls([]);
+    setIsTransitioning(false);
   };
 
   const handleRegenerate = async () => {
@@ -91,6 +119,7 @@ export default function App() {
     setIsRegenerating(true);
     setIsProcessing(true);
     setProgress(null);
+    setFinalVideoUrl(null);
     setError(null);
 
     try {
@@ -107,6 +136,9 @@ export default function App() {
 
       if (result?.stage === "error") {
         setError(result.message);
+      } else if (result?.video_url) {
+        const vMatch = result.video_url.match(/_v(\d+)\.mp4/);
+        if (vMatch) setActiveVersion(parseInt(vMatch[1], 10));
       }
     } catch (err) {
       setError(err.message);
@@ -124,29 +156,81 @@ export default function App() {
     }
   };
 
-  const handleSelectProject = (proj) => {
+  const handleSelectProject = async (proj) => {
     // Load a past project into the result view
     setShowGallery(false);
     setJobId(proj.job_id);
-
-    if (proj.latest_video_url && proj.latest_status === "complete") {
-      setFinalVideoUrl(proj.latest_video_url);
-    } else {
-      setFinalVideoUrl(null);
-    }
+    setTheme(proj.theme || "auto");
     setActiveVersion(null);
     setError(null);
     setIsProcessing(false);
     setProgress(null);
+    setPhotos([]);
+
+    // Load project photos as URL objects for ProgressTracker previews
+    try {
+      const photoList = await fetchPhotos(proj.job_id);
+      setProjectPhotoUrls(
+        photoList.map((p) => ({
+          // Fake File-like object with a name for preview — ProgressTracker uses URL.createObjectURL
+          // so we provide the URL string instead; we'll adapt ProgressTracker to handle this
+          url: `${API_BASE}${p.url}`,
+          name: p.filename,
+        }))
+      );
+    } catch {
+      setProjectPhotoUrls([]);
+    }
+
+    if (proj.latest_video_url && proj.latest_status === "complete") {
+      setFinalVideoUrl(proj.latest_video_url);
+      // Try to extract version from URL
+      const vMatch = proj.latest_video_url.match(/_v(\d+)\.mp4/);
+      if (vMatch) setActiveVersion(parseInt(vMatch[1], 10));
+    } else {
+      // No completed video yet — trigger regeneration automatically
+      setFinalVideoUrl(null);
+      setIsRegenerating(true);
+      setIsProcessing(true);
+      regenerateVideo(
+        proj.job_id,
+        { theme: proj.theme || "auto", durationTarget: 30, aspectRatio: "16:9" },
+        (update) => {
+          setProgress(update);
+          if (update.video_url) setFinalVideoUrl(update.video_url);
+        }
+      )
+        .then((result) => {
+          if (result?.stage === "error") setError(result.message);
+          else if (result?.video_url) {
+            const vMatch = result.video_url.match(/_v(\d+)\.mp4/);
+            if (vMatch) setActiveVersion(parseInt(vMatch[1], 10));
+          }
+        })
+        .catch((err) => {
+          setError(err.message);
+          setProgress({ stage: "error", progress: 0, message: err.message });
+        })
+        .finally(() => {
+          setIsProcessing(false);
+          setIsRegenerating(false);
+        });
+    }
   };
 
-  const showUpload = !isProcessing && !finalVideoUrl && !showGallery;
+  const showUpload = !isProcessing && !finalVideoUrl && !showGallery && !error && !isTransitioning;
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
+      {/* Subtle radial gradient background */}
+      <div className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 70%)",
+        }}
+      />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="border-b border-white/8 flex-shrink-0">
+      <header className="border-b border-white/8 flex-shrink-0 relative z-10 backdrop-blur-sm bg-black/50">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="text-[11px] font-mono tracking-[0.3em] text-white/80 uppercase">
@@ -168,7 +252,7 @@ export default function App() {
               </button>
             )}
 
-            {!isProcessing && !showGallery && projectCount > 0 && (
+            {!isProcessing && !showGallery && !finalVideoUrl && projectCount > 0 && (
               <button
                 onClick={() => setShowGallery(true)}
                 className="text-[10px] font-mono text-white/30 hover:text-white/70 tracking-widest uppercase transition-colors border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-sm"
@@ -181,11 +265,11 @@ export default function App() {
       </header>
 
       {/* ── Main ───────────────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 flex flex-col gap-12">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 flex flex-col gap-12 relative z-10">
 
         {/* ── UPLOAD STATE ─────────────────────────────────────────────────── */}
-        {showUpload && (
-          <div className="flex flex-col items-center gap-10 animate-fade-in">
+        {(showUpload || isTransitioning) && (
+          <div className={`flex flex-col items-center gap-10 ${isTransitioning ? 'animate-fade-out' : 'animate-fade-in'}`}>
 
             {/* Hero */}
             <div className="text-center space-y-2">
@@ -215,7 +299,7 @@ export default function App() {
 
                 <button
                   onClick={handleGenerate}
-                  disabled={photos.length === 0 || isProcessing}
+                  disabled={photos.length === 0 || isProcessing || isTransitioning}
                   className="
                     px-10 py-3 text-[11px] font-mono tracking-[0.25em] uppercase
                     border border-white text-white bg-black
@@ -225,7 +309,14 @@ export default function App() {
                     transition-all duration-200
                   "
                 >
-                  Create Film &nbsp;·&nbsp; {photos.length} photo{photos.length !== 1 ? "s" : ""}
+                  {isTransitioning ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                      Starting…
+                    </span>
+                  ) : (
+                    <>Create Film &nbsp;·&nbsp; {photos.length} photo{photos.length !== 1 ? "s" : ""}</>
+                  )}
                 </button>
               </div>
             )}
@@ -243,6 +334,9 @@ export default function App() {
           <ProjectGallery
             onSelectProject={handleSelectProject}
             onClose={() => setShowGallery(false)}
+            onProjectDeleted={() => {
+              fetchProjects().then((p) => setProjectCount(p.length)).catch(() => {});
+            }}
           />
         )}
 
@@ -250,7 +344,7 @@ export default function App() {
         {isProcessing && (
           <div className="max-w-3xl w-full mx-auto animate-shutter-drop">
             {progress ? (
-              <ProgressTracker progress={progress} photos={photos} />
+              <ProgressTracker progress={progress} photos={progressPhotos} />
             ) : (
               <div className="flex flex-col items-center gap-4 py-16">
                 <div className="w-6 h-6 border border-white/30 border-t-white rounded-full animate-spin" />
@@ -295,7 +389,7 @@ export default function App() {
       </main>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/8 flex-shrink-0">
+      <footer className="border-t border-white/8 flex-shrink-0 relative z-10 backdrop-blur-sm bg-black/50">
         <div className="max-w-5xl mx-auto px-6 py-4 text-[9px] font-mono text-white/15 tracking-widest flex items-center justify-between">
           <span>GEMINI 3 NYC HACKATHON</span>
           <span>GEMINI 2.5 FLASH · VEO 3.1 · FFMPEG</span>

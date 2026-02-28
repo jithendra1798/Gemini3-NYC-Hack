@@ -44,6 +44,16 @@ body {
   animation: cardEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* Upload view exit — fades + slides up before processing appears */
+@keyframes fadeOut {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.97); }
+}
+.animate-fade-out {
+  animation: fadeOut 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
 /* Processing panel drops in like a camera shutter */
 @keyframes shutterDrop {
   0%   { opacity: 0; transform: translateY(-12px); clip-path: inset(0 0 100% 0); }
@@ -173,6 +183,60 @@ body {
   font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 12px;
   line-height: 1.7;
+}
+
+/* ── Reorder strip ─────────────────────────────────────────────────────────── */
+.reorder-strip::-webkit-scrollbar { height: 3px; }
+.reorder-strip::-webkit-scrollbar-track { background: transparent; }
+.reorder-strip::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 9999px;
+}
+.reorder-strip::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+.reorder-strip { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent; }
+
+/* ── Video container ──────────────────────────────────────────────────────── */
+.video-container {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 20px 60px -15px rgba(0,0,0,0.7);
+  transition: box-shadow 0.4s ease;
+}
+.video-container:hover {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 30px 80px -15px rgba(0,0,0,0.8);
+}
+
+/* ── Enhanced 3D card depth glow ──────────────────────────────────────────── */
+.carousel-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 -30px 40px -20px rgba(0,0,0,0.5);
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+.carousel-card:hover::after { opacity: 0; }
+
+/* ── Floating particles (subtle background) ───────────────────────────────── */
+@keyframes floatUp {
+  0%   { transform: translateY(0) scale(1);   opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(-100vh) scale(0.5); opacity: 0; }
+}
+.particle {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  background: white;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
 }
 
 /* ── Noise texture overlay ────────────────────────────────────────────────── */

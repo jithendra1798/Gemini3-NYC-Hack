@@ -73,6 +73,12 @@ def list_projects() -> list[dict]:
     summaries = []
     for proj in store["projects"].values():
         latest = proj["versions"][-1] if proj["versions"] else None
+        # Build first photo thumbnail URL
+        first_photo_url = None
+        if proj["photo_paths"]:
+            from pathlib import Path as _P
+            first_name = _P(proj["photo_paths"][0]).name
+            first_photo_url = f"/api/uploads/{proj['job_id']}/{first_name}"
         summaries.append({
             "job_id": proj["job_id"],
             "created_at": proj["created_at"],
@@ -82,6 +88,7 @@ def list_projects() -> list[dict]:
             "latest_video_url": latest["video_url"] if latest else None,
             "latest_status": latest["status"] if latest else "pending",
             "latest_title": latest.get("script", {}).get("title", "") if latest else "",
+            "first_photo_url": first_photo_url,
         })
     return sorted(summaries, key=lambda s: s["created_at"], reverse=True)
 
@@ -199,3 +206,14 @@ def find_duplicate_project(fingerprint: str) -> Optional[str]:
         if proj.get("photo_fingerprint") == fingerprint:
             return job_id
     return None
+
+
+def delete_project(job_id: str) -> bool:
+    """Remove a project from the datastore. Returns True if found and removed."""
+    store = _load()
+    if job_id in store["projects"]:
+        del store["projects"][job_id]
+        _save(store)
+        logger.info("Datastore: deleted project %s", job_id)
+        return True
+    return False

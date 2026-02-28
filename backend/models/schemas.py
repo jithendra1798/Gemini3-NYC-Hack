@@ -90,6 +90,7 @@ class Script(BaseModel):
     title: str = ""
     overall_mood: str = ""
     music_direction: str = ""
+    narrative_summary: str = ""   # full story summary across all photos
     clips: list[Clip] = Field(default_factory=list)
 
 

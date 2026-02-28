@@ -11,19 +11,19 @@ const STAGES = [
     key: "scripting",
     num: "02",
     label: "SCRIPTING",
-    desc: "Writing a shot-by-shot cinematic script that connects your moments.",
+    desc: "Writing a shot-by-shot cinematic script with transitions for every photo.",
   },
   {
     key: "generating",
     num: "03",
     label: "GENERATING",
-    desc: "Veo 3.1 renders AI video clips for each script shot.",
+    desc: "Veo 3.1 renders video clips from each photo — one clip per image.",
   },
   {
     key: "assembling",
     num: "04",
     label: "ASSEMBLING",
-    desc: "FFmpeg stitches clips together with cinematic transitions.",
+    desc: "FFmpeg stitches all clips together with cinematic transitions and audio.",
   },
   {
     key: "complete",
@@ -39,11 +39,15 @@ function StagePreview({ stageKey, photos, message }) {
   const linesRef = useRef([]);
   const timerRef = useRef(null);
 
-  // Stable object URLs — created once per file, revoked on unmount
+  // Stable photo URLs — File objects get createObjectURL, URL objects use .url directly
   const photoUrls = useMemo(() => {
-    return (photos || []).slice(0, 6).map((f) => URL.createObjectURL(f));
+    return (photos || []).slice(0, 6).map((f) => {
+      if (f instanceof Blob) return { src: URL.createObjectURL(f), revoke: true };
+      if (f?.url) return { src: f.url, revoke: false };
+      return null;
+    }).filter(Boolean);
   }, []); // intentionally stable — photos won't change during processing
-  useEffect(() => () => photoUrls.forEach((u) => URL.revokeObjectURL(u)), [photoUrls]);
+  useEffect(() => () => photoUrls.forEach((u) => { if (u.revoke) URL.revokeObjectURL(u.src); }), [photoUrls]);
 
   // For scripting: simulate script lines appearing one by one
   useEffect(() => {
@@ -83,10 +87,10 @@ function StagePreview({ stageKey, photos, message }) {
       <div className="relative w-full h-36 rounded border border-white/8 bg-black overflow-hidden flex flex-wrap gap-1 p-2">
         <div className="scan-line" />
         {photoUrls.length > 0 ? (
-          photoUrls.map((url, i) => (
+          photoUrls.map((u, i) => (
             <div key={i} className="relative flex-1 min-w-[60px] h-full rounded overflow-hidden">
               <img
-                src={url}
+                src={u.src}
                 alt=""
                 className="w-full h-full object-cover opacity-70"
               />
@@ -120,60 +124,42 @@ function StagePreview({ stageKey, photos, message }) {
   }
 
   if (stageKey === "generating") {
-    // Show a grid of clip placeholders
-    const clipCount = Math.max(3, Math.min(6, (photos?.length || 0) + 2));
+    // Parse real clip progress from message like "Clip 2/5 generated"
+    const totalClips = photos?.length || 3;
+    let completedClips = 0;
+    const clipMatch = message?.match(/Clip\s+(\d+)\/(\d+)/);
+    if (clipMatch) {
+      completedClips = parseInt(clipMatch[1], 10);
+    }
+    const clipCount = Math.max(3, Math.min(6, totalClips));
     return (
       <div className="w-full h-36 rounded border border-white/8 bg-black overflow-hidden p-2">
         <div className="grid grid-cols-3 gap-1 h-full">
-          {Array.from({ length: clipCount }).map((_, i) => (
-            <div
-              key={i}
-              className="relative rounded bg-white/5 overflow-hidden flex items-center justify-center"
-            >
-              <div className="shimmer-bg absolute inset-0" />
-              <span className="text-[8px] font-mono text-white/20 z-10 tracking-widest">
-                CLIP {String(i + 1).padStart(2, "0")}
-              </span>
-              {/* Fake progress bar at bottom */}
-              <div className="absolute bottom-0 left-0 h-px bg-white/20 w-full">
-                <div
-                  className="h-full bg-white/60 transition-all duration-1000"
-                  style={{ width: i < 2 ? "100%" : i === 2 ? "60%" : "0%" }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (stageKey === "assembling") {
-    // Timeline strip
-    const clipCount = Math.max(3, Math.min(8, (photos?.length || 0) + 2));
-    return (
-      <div className="w-full h-36 rounded border border-white/8 bg-black overflow-hidden p-3 flex flex-col justify-center gap-3">
-        <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Timeline</span>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: clipCount }).map((_, i) => (
-            <React.Fragment key={i}>
+          {Array.from({ length: clipCount }).map((_, i) => {
+            const isDone = i < completedClips;
+            const isActive = i === completedClips;
+            return (
               <div
-                className="h-8 rounded flex-1 flex items-center justify-center transition-all duration-500"
-                style={{
-                  background: i < Math.ceil(clipCount / 2) ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
+                key={i}
+                className="relative rounded bg-white/5 overflow-hidden flex items-center justify-center"
               >
-                <span className="text-[7px] font-mono text-white/30">{String(i + 1).padStart(2, "0")}</span>
+                {!isDone && <div className="shimmer-bg absolute inset-0" />}
+                <span className={`text-[8px] font-mono z-10 tracking-widest ${isDone ? "text-white/50" : "text-white/20"}`}>
+                  CLIP {String(i + 1).padStart(2, "0")}
+                </span>
+                {isDone && (
+                  <span className="absolute top-1 right-1.5 text-[8px] font-mono text-white/40">✓</span>
+                )}
+                {/* Per-clip progress bar */}
+                <div className="absolute bottom-0 left-0 h-px bg-white/20 w-full">
+                  <div
+                    className="h-full bg-white/60 transition-all duration-1000"
+                    style={{ width: isDone ? "100%" : isActive ? "60%" : "0%" }}
+                  />
+                </div>
               </div>
-              {i < clipCount - 1 && (
-                <div className="w-1 h-px bg-white/20 flex-shrink-0" />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-        <div className="h-px bg-white/8 relative overflow-hidden rounded">
-          <div className="absolute inset-y-0 left-0 bg-white/40 transition-all duration-700" style={{ width: "65%" }} />
+            );
+          })}
         </div>
       </div>
     );
@@ -185,6 +171,40 @@ function StagePreview({ stageKey, photos, message }) {
         <div className="text-center space-y-1">
           <div className="text-2xl font-light text-white/80 tracking-widest animate-film-burn">■</div>
           <span className="text-[10px] font-mono text-white/40 tracking-widest uppercase">Film ready</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (stageKey === "assembling") {
+    // Parse progress from message to drive the fill bar
+    const isFinal = message?.includes("encoded") || message?.includes("preparing");
+    return (
+      <div className="w-full h-36 rounded border border-white/8 bg-black overflow-hidden p-3 flex flex-col items-center justify-center gap-3">
+        <div className="flex items-center gap-2">
+          {Array.from({ length: Math.min(5, (photos?.length || 3)) }).map((_, i, arr) => (
+            <React.Fragment key={i}>
+              <div className="w-10 h-7 rounded bg-white/10 flex items-center justify-center">
+                <span className="text-[7px] font-mono text-white/30">{String(i + 1).padStart(2, "0")}</span>
+              </div>
+              {i < arr.length - 1 && (
+                <span className="text-[8px] font-mono text-white/20 animate-pulse">→</span>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
+          <span className="text-[9px] font-mono text-white/30 tracking-widest">
+            {isFinal ? "ENCODING FINAL FILM" : "STITCHING TRANSITIONS"}
+          </span>
+        </div>
+        {/* Assembly progress bar */}
+        <div className="w-full max-w-xs h-px bg-white/10 mt-1 overflow-hidden">
+          <div
+            className="h-full bg-white/50 transition-all duration-1000 ease-out"
+            style={{ width: isFinal ? "90%" : "40%" }}
+          />
         </div>
       </div>
     );

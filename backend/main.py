@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from .config import FINAL_DIR, SCRIPTS_DIR, UPLOAD_DIR
 from .datastore import (
+    delete_project,
     get_all_versions,
     get_project,
     get_version,
@@ -141,7 +142,7 @@ async def generate(
 
         # ── 3. Store fingerprint for duplicate detection ──────────────────────
         file_metas = [
-            FileMeta(name=photo.filename or f"photo_{i}.jpg", size=len(data))
+            FileMeta(name=photos[i].filename or f"photo_{i}.jpg", size=len(data))
             for i, (_, data) in enumerate(raw_files)
         ]
         fingerprint = _compute_fingerprint(file_metas)
@@ -149,7 +150,7 @@ async def generate(
 
         logger.info("Job %s: saved %d photos to %s", job_id, len(photo_paths), job_dir)
 
-        # ── 3. Stream pipeline progress ──────────────────────────────────────
+        # ── 4. Stream pipeline progress ──────────────────────────────────────
         async for update in run_pipeline(
             job_id=job_id,
             photo_paths=photo_paths,
@@ -348,6 +349,40 @@ async def get_project_photos(job_id: str):
             "url": f"/api/uploads/{job_id}/{path.name}",
         })
     return photos
+
+
+@app.delete("/api/projects/{job_id}")
+async def delete_project_endpoint(job_id: str):
+    """Delete a project and its associated files."""
+    proj = get_project(job_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Remove uploaded photos
+    job_dir = UPLOAD_DIR / job_id
+    if job_dir.exists():
+        shutil.rmtree(job_dir, ignore_errors=True)
+
+    # Remove generated clips and final videos
+    for ver in proj.get("versions", []):
+        for clip_path in ver.get("clip_paths", []):
+            p = Path(clip_path)
+            if p.exists():
+                p.unlink(missing_ok=True)
+        if ver.get("final_video"):
+            p = Path(ver["final_video"])
+            if p.exists():
+                p.unlink(missing_ok=True)
+
+    # Remove script files
+    for f in SCRIPTS_DIR.glob(f"{job_id}*"):
+        f.unlink(missing_ok=True)
+
+    # Remove from datastore
+    delete_project(job_id)
+
+    logger.info("Deleted project %s and all associated files", job_id)
+    return {"status": "deleted", "job_id": job_id}
 
 
 @app.get("/api/uploads/{job_id}/{filename}")

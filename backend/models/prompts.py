@@ -2,27 +2,28 @@
 
 # ── Stage 1: Scene Analysis Prompt ────────────────────────────────────────────
 
-ANALYSIS_PROMPT = """You are a professional Cinematographer and Technical Director. Your goal is to analyze the provided photo collection and generate a production-ready JSON manifest that drives an AI video generation pipeline (Images → LLM → Script/Key Frame → Video).
+ANALYSIS_PROMPT = """You are a professional Cinematographer specializing in creating ONE UNIFIED short film from a collection of photos. Your goal is to find the COMMON THREAD that ties ALL photos together and create a single cohesive cinematic vision.
 
-For each photo, extract and generate production-level data:
+━━━ CRITICAL: UNIFIED VISION ━━━
+These photos are NOT separate scenes — they are all MOMENTS within ONE continuous story.
+Your job is to find what CONNECTS them: shared subjects, colors, emotions, environments,
+or an implied journey. Even if the photos look different, find the thread that unites them
+into a single flowing narrative.
 
-    location_type: (Indoor/Outdoor + specific setting like "urban residential street").
+For each photo, analyze:
 
+    location_type: (Indoor/Outdoor + specific setting).
     time_of_day: (Morning, afternoon, golden_hour, evening, night).
+    weather: (Atmospheric conditions and their visual effect).
+    mood: (How this photo's mood connects to the OVERALL collection mood).
+    subjects: (Describe what's in the photo. Identify recurring subjects, colors, or themes shared with OTHER photos in the collection).
+    key_details: (Visual details. Specifically note elements that VISUALLY BRIDGE to other photos — matching colors, similar textures, recurring shapes, shared lighting).
+    energy_level: (Low, medium, or high).
+    suggested_camera_movement: (Camera movement that would smoothly lead INTO the next photo's content).
 
-    weather: (Detailed atmospheric conditions and their visual effect).
-
-    mood: (Descriptive tone, e.g., "Isolated and stagnant").
-
-    subjects: (Crucial: Describe the environment from the photo and introduce a "Main Figure" or protagonist to provide a narrative anchor for the video).
-
-    key_details: (A highly detailed "Key Picture" prompt for image generators. Include lighting quality, film stock like "35mm", textures, and color palette).
-
-    energy_level: (Low, medium, or high — this will dictate the motion speed and temporal consistency of the video).
-
-    suggested_camera_movement: (A technical video script. Include specific camera physics, start/end frames, and a description of the audio/foley layer).
-
-Then, group the photos into SCENES. Photos in the same scene share a similar environment and thematic connection.
+Group ALL photos into scenes. Prefer FEWER, LARGER scenes — ideally ONE scene that
+encompasses all photos as a continuous sequence. Only split into multiple scenes if
+the photos truly depict completely unrelated content.
 
 Output as JSON with this exact schema:
 {
@@ -48,7 +49,7 @@ Output as JSON with this exact schema:
 "overall_mood": "..."
 }
 ],
-"suggested_narrative_arc": "A brief description of the recommended story flow connecting these scenes into a cohesive short film clip."
+"suggested_narrative_arc": "A 3-5 sentence description of ONE unified story that flows through ALL photos as a single continuous journey. Describe the visual and emotional thread that connects every image."
 }
 """
 
@@ -67,58 +68,109 @@ def build_script_prompt(
         else "Auto-detect the best cinematic theme from the photos."
     )
 
-    return f"""You are an award-winning short film director. Given the following scene analysis from
-a photo collection ({num_photos} photos), craft a cinematic narrative and select ONE single
-key image to generate a short preview video clip (~8 seconds).
+    # Compute per-clip budget
+    clip_duration = max(5, min(8, duration_target // max(num_photos, 1)))
+
+    return f"""You are an award-winning short film director who specializes in creating
+ONE UNIFIED cinematic experience from a collection of photos. You must treat ALL
+{num_photos} photos as interconnected moments in a SINGLE continuous story — NOT as
+separate independent scenes.
 
 Scene Analysis:
 {scene_analysis_json}
 
 Theme Direction: {theme_instruction}
 
+━━━ YOUR CORE MISSION ━━━
+Create a SINGLE UNIFIED SCENE that weaves ALL {num_photos} photos into one flowing
+cinematic journey. The viewer should feel like they are watching ONE continuous film,
+not a slideshow of separate clips. Find the visual and emotional thread that connects
+every photo and build your narrative around it.
+
 ━━━ HOW VIDEO GENERATION WORKS ━━━
-You will pick ONE key photo from the collection. We will:
+For EACH photo you will create ONE clip. The pipeline will:
   1. Take that photo as the starting frame / visual anchor.
   2. Send your veo_prompt + that photo to Veo (image-to-video AI).
-  3. Veo generates an 8-second video clip that starts from the photo and
-     applies the camera motion, mood, and action you describe.
+  3. Veo generates a {clip_duration}-second video clip starting from the photo,
+     applying the camera motion, mood, and action you describe.
+  4. All clips are then stitched together with smooth crossfade transitions,
+     producing one continuous short film.
 
-Choose the photo that BEST REPRESENTS the overall story — the most visually
-compelling, emotionally resonant, or narratively central image.
+You MUST create exactly {num_photos} clip(s) — one for EVERY photo (IDs 0 through {num_photos - 1}).
+Order them to create the smoothest, most natural narrative flow.
 
-Your veo_prompt must describe CINEMATIC MOTION STARTING FROM that photo:
-  ✓ "Camera slowly pulls back from the subject's face revealing the cityscape behind them, golden hour light sweeping across the buildings"
-  ✗ "A photo of a person in front of a city" (static — useless for video)
+━━━ UNIFIED SCENE — CRITICAL RULES ━━━
+• ALL clips are part of ONE story. They are NOT separate scenes — they are
+  consecutive moments within a single continuous narrative journey.
+• VISUAL BRIDGES: Each clip's veo_prompt must describe motion that visually
+  connects to the next clip. Think about what elements the clips share:
+  - Similar colors, textures, or lighting that carry across clips
+  - Camera motion that ends pointing toward what the next photo shows
+  - Shared mood and atmosphere that creates a seamless emotional flow
+  - Environmental sounds that blend from one clip into the next
+• CONTINUOUS MOTION: Design camera movements as one unbroken journey:
+  - Clip 1 camera pushes forward → Clip 2 continues forward motion from new angle
+  - Clip 3 slowly pans right → Clip 4 picks up from a similar rightward drift
+  - Avoid jarring direction changes between consecutive clips
+• CONSISTENT ATMOSPHERE: ALL clips must share the same:
+  - Color temperature (warm/cool/neutral — pick ONE for the whole film)
+  - Lighting quality (soft/hard/diffused — consistent throughout)
+  - Energy level (gradually build or maintain — never randomly jump)
+  - Audio texture (environmental sounds should flow as one soundscape)
+• TRANSITIONS: Prefer smooth crossfades between clips. Use harder transitions
+  sparingly and only for intentional dramatic effect:
+    crossfade — smooth blend (DEFAULT — use for most transitions)
+    fade — gentle fade through black (for significant time/space shifts)
+    match_cut — when two photos share similar visual shapes/composition
+    zoom_through — zoom into a detail that connects to next photo
+    whip_pan — only for high-energy moments
+    cut — only for sudden dramatic reveals
+  The LAST clip's transition_to_next should be "fade" (ending).
+
+━━━ MUSIC & AUDIO ━━━
+• Write ONE global music_direction — a single continuous score for the whole film.
+  The music should feel like one unbroken piece, not separate tracks per clip.
+• Each clip's audio_mood describes the ambient layer for that moment, but they
+  must all fit within the SAME soundscape. Think of it as one continuous
+  environmental recording that evolves gradually.
+• The final film should sound like you're moving through ONE space/experience.
 
 ━━━ OUTPUT FORMAT ━━━
-Output as JSON with this EXACT schema — one clip only:
+Output as JSON with this EXACT schema:
 {{
   "title": "Film Title (evocative, 2-5 words)",
-  "overall_mood": "dominant mood across all photos",
-  "music_direction": "Description of the musical score — instruments, tempo, emotional arc",
-  "narrative_summary": "2-4 sentence summary of the full story these {num_photos} photos tell together. Describe the arc, setting, and emotional journey.",
-  "clip": {{
-    "clip_number": 1,
-    "key_photo_id": 0,
-    "veo_prompt": "Camera slowly pulls back from the subject revealing...",
-    "duration_seconds": 8,
-    "transition_to_next": "fade",
-    "audio_mood": "gentle ambient warmth",
-    "narration": "Optional evocative caption, max 10 words",
-    "scene_description": "1-2 sentence description of what this clip shows and why this photo was chosen as the representative frame"
-  }}
+  "overall_mood": "The single unified mood of this film",
+  "music_direction": "One continuous musical score — describe the single piece of music that plays from start to finish, how it evolves, its instruments and emotional arc.",
+  "narrative_summary": "3-5 sentences describing the ONE story this film tells. This is a single journey — beginning, middle, end — flowing through all {num_photos} photos as interconnected moments.",
+  "clips": [
+    {{
+      "clip_number": 1,
+      "key_photo_id": 0,
+      "veo_prompt": "[Describe smooth cinematic motion starting from this photo. Include how the motion/mood/visuals connect to the next clip. Describe ambient sound that blends with the overall soundscape.]",
+      "duration_seconds": {clip_duration},
+      "transition_to_next": "crossfade",
+      "audio_mood": "[ambient sounds that blend seamlessly with previous and next clips]",
+      "narration": "Optional evocative caption, max 10 words",
+      "scene_description": "How this moment connects to the overall unified story"
+    }}
+  ]
 }}
 
 IMPORTANT RULES:
-1. key_photo_id must be one of: 0 through {num_photos - 1}. Pick the SINGLE BEST one.
-2. The veo_prompt must describe CINEMATIC MOTION, not a static description.
-3. Include audio direction in the veo_prompt (Veo 3.1 generates native audio).
-4. narrative_summary should weave together the story across ALL {num_photos} photos.
+1. You MUST include exactly {num_photos} clips — one per photo (IDs 0 through {num_photos - 1}).
+2. key_photo_id must be unique per clip — each photo is used exactly once.
+3. Every veo_prompt MUST describe CINEMATIC MOTION that flows into the next clip:
+   ✓ "Camera glides forward through the golden-lit corridor, warm tones deepening as ambient piano echoes softly. The movement drifts toward the window light, carrying the viewer's gaze into the brightness that will open the next moment."
+   ✗ "A photo of a building" (static, disconnected — useless)
+4. VISUAL CONTINUITY in every veo_prompt — mention how the ending of this clip
+   connects visually to what comes next (shared light, color, direction, mood).
+5. Include specific audio/foley that blends across clips (shared ambient sounds).
+6. Default to "crossfade" transitions — they create the smoothest flow.
+7. The last clip's transition_to_next MUST be "fade".
 
 ⚠️ VEO SAFETY — CRITICAL:
-- NEVER mention real people's names in veo_prompt (e.g. no "John", "Taylor Swift", etc.)
-- NEVER reference celebrities, public figures, or named individuals.
-- Use generic descriptors: "the subject", "the figure", "the person", "the woman", "the man", etc.
+- NEVER mention real people's names in veo_prompt.
+- Use generic descriptors: "the subject", "the figure", "the person", etc.
 - Veo WILL REJECT prompts containing real names or celebrity likenesses.
 """
 
@@ -126,10 +178,11 @@ IMPORTANT RULES:
 # ── Veo Prompt Enhancement ────────────────────────────────────────────────────
 
 def enhance_veo_prompt(base_prompt: str, audio_mood: str = "") -> str:
-    """Add cinematic quality modifiers to a Veo prompt."""
+    """Add quality modifiers — emphasize smooth flow and visual continuity."""
     suffix = (
-        " Cinematic quality, shallow depth of field, professional color grading, "
-        "film grain, anamorphic lens flare."
+        " Smooth continuous motion, natural lighting, professional quality, "
+        "fluid camera movement, seamless temporal consistency. "
+        "The motion should feel like part of one continuous unbroken shot."
     )
     if audio_mood:
         suffix += f" Audio mood: {audio_mood}."

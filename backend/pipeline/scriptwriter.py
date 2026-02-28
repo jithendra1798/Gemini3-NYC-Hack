@@ -10,7 +10,7 @@ from google.genai import types
 
 from ..config import GEMINI_API_KEY, GEMINI_TEXT_MODEL
 from ..models.prompts import build_script_prompt
-from ..models.schemas import AnalysisResult, SingleClipScript
+from ..models.schemas import AnalysisResult, Script
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ async def generate_script(
     analysis: AnalysisResult,
     theme: str = "auto",
     duration_target: int = 30,
-) -> SingleClipScript:
-    """Generate a narrative summary and pick one key image for Veo preview."""
+) -> Script:
+    """Generate a multi-clip cinematic script — one clip per photo."""
     client = _get_client()
 
     analysis_json = analysis.model_dump_json(indent=2)
@@ -36,8 +36,8 @@ async def generate_script(
         num_photos=num_photos,
     )
 
-    logger.info("Generating single-clip script with %s (theme=%s, %d photos)…",
-                GEMINI_TEXT_MODEL, theme, num_photos)
+    logger.info("Generating multi-clip script with %s (theme=%s, %d photos → %d clips)…",
+                GEMINI_TEXT_MODEL, theme, num_photos, num_photos)
 
     response = client.models.generate_content(
         model=GEMINI_TEXT_MODEL,
@@ -51,4 +51,16 @@ async def generate_script(
     logger.debug("Raw script response: %s", raw_json[:500])
 
     data = json.loads(raw_json)
-    return SingleClipScript(**data)
+    script = Script(**data)
+
+    # Validate: every photo ID should appear exactly once
+    used_ids = {clip.key_photo_id for clip in script.clips}
+    expected_ids = set(range(num_photos))
+    if used_ids != expected_ids:
+        logger.warning(
+            "Script uses photo IDs %s but expected %s — some photos may be missing from the film",
+            sorted(used_ids), sorted(expected_ids),
+        )
+
+    logger.info("Script complete: '%s' — %d clips", script.title, len(script.clips))
+    return script
