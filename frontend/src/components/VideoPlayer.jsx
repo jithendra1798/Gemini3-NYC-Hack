@@ -78,10 +78,11 @@ export default function VideoPlayer({ videoUrl }) {
           download="cinesnap-film.mp4"
           className="
             inline-flex items-center gap-2 px-4 py-1.5
-            text-[10px] font-mono tracking-[0.15em] uppercase
+            text-[10px] font-mono tracking-widest uppercase
             border border-white/20 text-white/50
-            hover:border-white/50 hover:text-white hover:bg-white/5
-            transition-all duration-200
+            hover:border-white/50 hover:text-white/80
+            active:scale-95
+            transition-all duration-150
           "
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
