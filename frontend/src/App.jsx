@@ -220,6 +220,7 @@ export default function App() {
                     px-10 py-3 text-[11px] font-mono tracking-[0.25em] uppercase
                     border border-white text-white bg-black
                     hover:bg-white hover:text-black
+                    active:scale-[0.97] active:opacity-80
                     disabled:opacity-30 disabled:cursor-not-allowed
                     transition-all duration-200
                   "
@@ -247,7 +248,7 @@ export default function App() {
 
         {/* ── PROCESSING STATE ─────────────────────────────────────────────── */}
         {isProcessing && (
-          <div className="max-w-3xl w-full mx-auto animate-fade-in">
+          <div className="max-w-3xl w-full mx-auto animate-shutter-drop">
             {progress ? (
               <ProgressTracker progress={progress} photos={photos} />
             ) : (

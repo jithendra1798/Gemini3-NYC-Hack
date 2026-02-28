@@ -23,9 +23,9 @@ export default function ThemeSelector({ theme, setTheme, disabled }) {
             disabled={disabled}
             className={`
               px-4 py-2 text-[11px] font-mono tracking-widest uppercase
-              transition-all duration-150
+              transition-all duration-150 active:scale-95
               ${theme === t.id
-                ? "bg-white text-black"
+                ? "bg-white text-black scale-[1.03]"
                 : "bg-black text-white/40 hover:text-white/80 hover:bg-white/5"
               }
               ${disabled ? "opacity-40 pointer-events-none" : "cursor-pointer"}

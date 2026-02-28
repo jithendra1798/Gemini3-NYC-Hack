@@ -63,11 +63,11 @@ export default function ProjectGallery({ onSelectProject, onClose }) {
     <div className="w-full max-w-3xl mx-auto animate-fade-in">
       {/* Gallery header */}
       <div className="flex items-center justify-between mb-8">
-        <div className="space-y-1">
-          <h2 className="text-lg font-light tracking-tight text-white">Projects</h2>
-          <p className="text-[10px] font-mono text-white/25 tracking-widest">
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Projects</span>
+          <span className="text-[11px] font-mono text-white/40">
             {projects.length} project{projects.length !== 1 ? "s" : ""}
-          </p>
+          </span>
         </div>
         <button
           onClick={onClose}

@@ -112,33 +112,44 @@ async def generate(
     except ValueError:
         theme_enum = Theme.AUTO
 
-    # Create job & save uploads
+    # Create job directory immediately — file saving happens inside the stream
     job_id = create_job()
     job_dir = UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    photo_paths: list[str] = []
+    # Read all file bytes into memory NOW (before the async generator),
+    # while the UploadFile objects are still valid.
+    raw_files: list[tuple[str, bytes]] = []
     for i, photo in enumerate(photos):
         ext = Path(photo.filename or "photo.jpg").suffix or ".jpg"
-        dest = job_dir / f"photo_{i:03d}{ext}"
-        with open(dest, "wb") as f:
-            shutil.copyfileobj(photo.file, f)
-        photo_paths.append(str(dest))
+        raw_files.append((f"photo_{i:03d}{ext}", await photo.read()))
 
-    logger.info("Job %s: saved %d photos to %s", job_id, len(photo_paths), job_dir)
-
-    # Store fingerprint for duplicate detection
-    # Use original filenames + file sizes (matches what frontend sends to /api/check-duplicate)
-    file_metas = []
-    for i, photo in enumerate(photos):
-        # UploadFile.size is the content-length from the browser
-        size = photo.size if photo.size else Path(photo_paths[i]).stat().st_size
-        file_metas.append(FileMeta(name=photo.filename or f"photo_{i}.jpg", size=size))
-    fingerprint = _compute_fingerprint(file_metas)
-    store_photo_fingerprint(job_id, fingerprint)
-
-    # Return SSE stream
+    # Return SSE stream — first event fires immediately so the UI shows progress
     async def event_stream():
+        import asyncio
+
+        # ── 1. Announce upload received ──────────────────────────────────────
+        n = len(raw_files)
+        yield f"data: {{\"stage\":\"analyzing\",\"progress\":0.05,\"message\":\"Received {n} photo{'s' if n != 1 else ''} — saving…\"}}\n\n"
+
+        # ── 2. Save files to disk (offload blocking I/O) ──────────────────────
+        photo_paths: list[str] = []
+        for filename, data in raw_files:
+            dest = job_dir / filename
+            await asyncio.to_thread(dest.write_bytes, data)
+            photo_paths.append(str(dest))
+
+        # ── 3. Store fingerprint for duplicate detection ──────────────────────
+        file_metas = [
+            FileMeta(name=photo.filename or f"photo_{i}.jpg", size=len(data))
+            for i, (_, data) in enumerate(raw_files)
+        ]
+        fingerprint = _compute_fingerprint(file_metas)
+        store_photo_fingerprint(job_id, fingerprint)
+
+        logger.info("Job %s: saved %d photos to %s", job_id, len(photo_paths), job_dir)
+
+        # ── 3. Stream pipeline progress ──────────────────────────────────────
         async for update in run_pipeline(
             job_id=job_id,
             photo_paths=photo_paths,
