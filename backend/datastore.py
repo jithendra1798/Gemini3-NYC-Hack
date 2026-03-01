@@ -87,7 +87,7 @@ def list_projects() -> list[dict]:
             "num_versions": len(proj["versions"]),
             "latest_video_url": latest["video_url"] if latest else None,
             "latest_status": latest["status"] if latest else "pending",
-            "latest_title": latest.get("script", {}).get("title", "") if latest else "",
+            "latest_title": (latest.get("script") or {}).get("title", "") if latest else "",
             "first_photo_url": first_photo_url,
         })
     return sorted(summaries, key=lambda s: s["created_at"], reverse=True)

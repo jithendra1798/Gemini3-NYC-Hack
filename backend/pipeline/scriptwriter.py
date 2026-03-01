@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from google import genai
 from google.genai import types
@@ -17,6 +18,50 @@ logger = logging.getLogger(__name__)
 
 def _get_client() -> genai.Client:
     return genai.Client(api_key=GEMINI_API_KEY)
+
+
+def _parse_json_resilient(raw: str) -> dict:
+    """Parse JSON from Gemini, handling common formatting issues."""
+    # 1. Strip markdown code fences if present
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text)
+
+    # 2. Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Fix trailing commas before } or ]
+    cleaned = re.sub(r",\s*([}\]])", r"\1", text)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 4. Try to extract the first valid JSON object from the text
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidate = text[start : i + 1]
+                candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+
+    # 5. Give up — raise with the original text for debugging
+    logger.error("Failed to parse JSON from Gemini. Raw (first 1000 chars): %s", text[:1000])
+    raise json.JSONDecodeError("Could not parse Gemini response as JSON", text, 0)
 
 
 async def generate_script(
@@ -50,7 +95,7 @@ async def generate_script(
     raw_json = response.text
     logger.debug("Raw script response: %s", raw_json[:500])
 
-    data = json.loads(raw_json)
+    data = _parse_json_resilient(raw_json)
     script = Script(**data)
 
     # Validate: every photo ID should appear exactly once
